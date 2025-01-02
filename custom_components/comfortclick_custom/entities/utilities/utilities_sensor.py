@@ -44,7 +44,7 @@ class UtilitiesSensor(CoordinatorEntity, SensorEntity):
 
     value = None
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: UtilitiesSensorConfig):
+    def __init__(self, coordinator: ComfortClickCoordinator, config: UtilitiesSensorConfig) -> None:
         """Initialize the door sensor."""
         # coordinator that manages state
         self._coordinator = coordinator

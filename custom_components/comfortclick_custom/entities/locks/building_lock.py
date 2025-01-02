@@ -20,7 +20,7 @@ class BuildingLockConfig:
 class BuildingLock(CoordinatorEntity, LockEntity):
     """Representation of a door with a lock entity."""
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: BuildingLockConfig):
+    def __init__(self, coordinator: ComfortClickCoordinator, config: BuildingLockConfig) -> None:
         super().__init__(coordinator)
         """Initialize the door sensor."""
         # coordinator that manages state

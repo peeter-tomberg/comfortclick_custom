@@ -38,7 +38,7 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
     _attr_current_temperature = None
     _attr_target_temperature = None
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: RoomThermostatConfig):
+    def __init__(self, coordinator: ComfortClickCoordinator, config: RoomThermostatConfig) -> None:
         """Initialize the AC."""
         super().__init__(coordinator)
         # coordinator that manages state

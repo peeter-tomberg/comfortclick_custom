@@ -20,7 +20,7 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
     current_option = None | VentTempModes
     options = [VentTempModes.WARM_AIR, VentTempModes.COLD_AIR]
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig):
+    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig) -> None:
         """Initialize the door sensor."""
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-temp-select"
@@ -48,10 +48,10 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
         _LOGGER.warning(f"Changing option to {option}")
         # If we want warm air pushing in, we should turn winter mode on
         if option == VentTempModes.WARM_AIR:
-            self.update_mode(True)
+            self.update_mode(is_winter_mode_on=True)
             await self._coordinator.api.set_value(self._config.vent_winter_mode, True)
         if option == VentTempModes.COLD_AIR:
-            self.update_mode(False)
+            self.update_mode(is_winter_mode_on=False)
             await self._coordinator.api.set_value(self._config.vent_winter_mode, False)
 
     @callback
@@ -59,7 +59,7 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
         """Fetch new state data for the sensor."""
         # If winter mode is on, that means warm air is being pushed in
         is_winter_mode_on = self._coordinator.api.get_value(self._config.vent_winter_mode)
-        self.update_mode(is_winter_mode_on)
+        self.update_mode(is_winter_mode_on=is_winter_mode_on)
 
 
 

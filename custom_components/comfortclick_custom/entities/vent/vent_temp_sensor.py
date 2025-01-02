@@ -19,7 +19,7 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
     value = None
     _mode = VentPresetModes
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig):
+    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig) -> None:
         """Initialize the door sensor."""
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-temperature-sensor"
@@ -43,7 +43,7 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
         """Return the state of the sensor."""
         return self.value
 
-    def _check_home_mode(self):
+    def _check_home_mode(self) -> bool:
         is_home_mode_on = self._coordinator.api.get_value(self._config.home_mode)
         home_vent_temperature = self._coordinator.api.get_value(self._config.home_vent_air_temp)
         if is_home_mode_on and (self._mode != VentPresetModes.HOME or self.value != home_vent_temperature):
@@ -53,7 +53,7 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
             return True
         return False
 
-    def _check_away_mode(self):
+    def _check_away_mode(self) -> bool:
         is_away_mode_on = self._coordinator.api.get_value(self._config.away_mode)
         away_vent_temperature = self._coordinator.api.get_value(self._config.away_vent_air_temp)
         if is_away_mode_on and (self._mode != VentPresetModes.AWAY or self.value != away_vent_temperature):
@@ -63,7 +63,7 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
             return True
         return False
 
-    def _check_guest_mode(self):
+    def _check_guest_mode(self) -> bool:
         is_guest_mode_on = self._coordinator.api.get_value(self._config.guest_mode)
         guest_vent_temperature = self._coordinator.api.get_value(self._config.guest_vent_air_temp)
         if is_guest_mode_on and (self._mode != VentPresetModes.GUESTS or self.value != guest_vent_temperature):

@@ -26,7 +26,7 @@ class RoomFan(CoordinatorEntity, FanEntity):
     _attr_supported_features = (FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF)
     _attr_is_on = None
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: RoomFanConfig):
+    def __init__(self, coordinator: ComfortClickCoordinator, config: RoomFanConfig) -> None:
         """Initialize the Fan."""
         # coordinator that manages state
         self._coordinator = coordinator

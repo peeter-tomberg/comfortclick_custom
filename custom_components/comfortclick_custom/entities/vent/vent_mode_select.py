@@ -21,7 +21,7 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
     current_option = None | VentPresetModes
     options = [VentPresetModes.AWAY, VentPresetModes.HOME, VentPresetModes.GUESTS]
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig):
+    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig) -> None:
         """Initialize the door sensor."""
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-mode-select"
