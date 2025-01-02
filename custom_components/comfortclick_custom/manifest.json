@@ -1,0 +1,19 @@
+{
+  "domain": "comfortclick_custom",
+  "name": "ConfortClick Custom Integration",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "",
+  "homekit": {
+    "supported_features": [
+      "climate",
+      "lock"
+    ]
+  },
+  "iot_class": "local_push",
+  "requirements": [],
+  "ssdp": [],
+  "version": "0.1.0",
+  "zeroconf": []
+}
