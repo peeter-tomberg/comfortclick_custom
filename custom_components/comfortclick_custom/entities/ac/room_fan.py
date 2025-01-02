@@ -1,8 +1,8 @@
 import logging
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any
 
-from homeassistant.components.fan import FanEntityFeature, FanEntity
+from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -14,19 +14,23 @@ _LOGGER = logging.getLogger(__name__)
 @dataclass
 class RoomFanConfig:
     """Class for keeping track of an item in inventory."""
+
     name: str
     heating_id: str
     lock_id: str
     fan_id: str
 
+
 class RoomFan(CoordinatorEntity, FanEntity):
     # Entity
     _attr_should_poll = False
     # FanEntity
-    _attr_supported_features = (FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF)
+    _attr_supported_features = FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
     _attr_is_on = None
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: RoomFanConfig) -> None:
+    def __init__(
+        self, coordinator: ComfortClickCoordinator, config: RoomFanConfig
+    ) -> None:
         """Initialize the Fan."""
         # coordinator that manages state
         self._coordinator = coordinator
@@ -56,8 +60,13 @@ class RoomFan(CoordinatorEntity, FanEntity):
             return True
         return False
 
-    async def async_turn_on(self, speed: Optional[str] = None, percentage: Optional[int] = None,
-                            preset_mode: Optional[str] = None, **kwargs: Any) -> None:
+    async def async_turn_on(
+        self,
+        speed: str | None = None,
+        percentage: int | None = None,
+        preset_mode: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Turn on the fan."""
         await self._coordinator.api.set_value(self._config.lock_id, False)
 

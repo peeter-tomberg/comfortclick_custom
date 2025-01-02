@@ -1,21 +1,21 @@
 """Config flow for Hello World integration."""
+
 from __future__ import annotations
 
 import logging
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries, exceptions
-from homeassistant.core import HomeAssistant
-
 from homeassistant.const import (
     CONF_HOST,
     CONF_PASSWORD,
     CONF_USERNAME,
 )
-from .const import DOMAIN  # pylint:disable=unused-import
+from homeassistant.core import HomeAssistant
+
 from .api import ApiInstance
+from .const import DOMAIN  # pylint:disable=unused-import
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,15 +31,20 @@ _LOGGER = logging.getLogger(__name__)
 # (in square brackets), rather than the actual translated value. I did not attempt to
 # figure this out or look further into it.
 
-DATA_SCHEMA = vol.Schema({
-    vol.Required(CONF_HOST, description={"suggested_value": "https://68.67.65.65"}): str,
-    vol.Required(CONF_USERNAME, description={"suggested_value": "test"}): str,
-    vol.Required(CONF_PASSWORD, description={"suggested_value": "1234"}): str,
-})
+DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(
+            CONF_HOST, description={"suggested_value": "https://68.67.65.65"}
+        ): str,
+        vol.Required(CONF_USERNAME, description={"suggested_value": "test"}): str,
+        vol.Required(CONF_PASSWORD, description={"suggested_value": "1234"}): str,
+    }
+)
 
 
 async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
+    """
+    Validate the user input allows us to connect.
 
     Data has the keys from DATA_SCHEMA with values provided by the user.
     """

@@ -5,14 +5,16 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .vent_config import VentConfig
 from ... import ComfortClickCoordinator
+from .vent_config import VentConfig
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class VentTempModes(StrEnum):
     WARM_AIR = "Warm air"
     COLD_AIR = "Cold air"
+
 
 class VentTempSelect(CoordinatorEntity, SelectEntity):
     """Representation of a door with a lock entity."""
@@ -20,7 +22,9 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
     current_option = None | VentTempModes
     options = [VentTempModes.WARM_AIR, VentTempModes.COLD_AIR]
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig) -> None:
+    def __init__(
+        self, coordinator: ComfortClickCoordinator, config: VentConfig
+    ) -> None:
         """Initialize the door sensor."""
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-temp-select"
@@ -58,8 +62,7 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
         # If winter mode is on, that means warm air is being pushed in
-        is_winter_mode_on = self._coordinator.api.get_value(self._config.vent_winter_mode)
+        is_winter_mode_on = self._coordinator.api.get_value(
+            self._config.vent_winter_mode
+        )
         self.update_mode(is_winter_mode_on=is_winter_mode_on)
-
-
-

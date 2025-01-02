@@ -15,9 +15,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-        async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ):
     """Set up the Sensors."""
     # This gets the data update coordinator from hass.data as specified in your __init__.py
@@ -28,7 +28,9 @@ async def async_setup_entry(
     utilities_configs = await load_utilities_config()
     vent_config = await load_vent_config()
 
-    sensors = list(map(lambda config: UtilitiesSensor(coordinator, config), utilities_configs))
+    sensors = list(
+        map(lambda config: UtilitiesSensor(coordinator, config), utilities_configs)
+    )
     sensors.append(VentTemperatureSensor(coordinator, vent_config))
 
     # Create the sensors.

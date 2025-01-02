@@ -1,7 +1,12 @@
 import logging
 from dataclasses import dataclass
 
-from homeassistant.components.climate import ClimateEntity, HVACMode, HVACAction, ClimateEntityFeature, FAN_AUTO
+from homeassistant.components.climate import (
+    ClimateEntity,
+    ClimateEntityFeature,
+    HVACAction,
+    HVACMode,
+)
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -14,13 +19,16 @@ _LOGGER = logging.getLogger(__name__)
 @dataclass
 class RoomThermostatConfig:
     """Class for keeping track of an item in inventory."""
+
     name: str | None
     heating_id: str
     fan_id: str | None
     current_temperature_id: str
     target_temperature_id: str
 
-    target_temperature_step: float = 0.5 # How many degrees can we go up/down in one click
+    target_temperature_step: float = (
+        0.5  # How many degrees can we go up/down in one click
+    )
     min_temp: int = 18
     max_temp: int = 24
 
@@ -38,7 +46,9 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
     _attr_current_temperature = None
     _attr_target_temperature = None
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: RoomThermostatConfig) -> None:
+    def __init__(
+        self, coordinator: ComfortClickCoordinator, config: RoomThermostatConfig
+    ) -> None:
         """Initialize the AC."""
         super().__init__(coordinator)
         # coordinator that manages state
@@ -68,13 +78,17 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         return HVACAction.IDLE
 
     def get_current_temperature_from_api_state(self):
-        current_temperature = self._coordinator.api.get_value(self._config.current_temperature_id)
+        current_temperature = self._coordinator.api.get_value(
+            self._config.current_temperature_id
+        )
         if current_temperature is None:
             return 0
         return round(float(current_temperature), 1)
 
     def get_target_temperature_from_api_state(self):
-        target_temperature = self._coordinator.api.get_value(self._config.target_temperature_id)
+        target_temperature = self._coordinator.api.get_value(
+            self._config.target_temperature_id
+        )
         if target_temperature is None:
             return 0
         return round(float(target_temperature), 1)
@@ -84,7 +98,9 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         """Set new target temperature."""
         temperature = kwargs["temperature"]
         _LOGGER.info(f"Updating target temperature to {temperature}")
-        await self._coordinator.api.set_value(self._config.target_temperature_id, temperature)
+        await self._coordinator.api.set_value(
+            self._config.target_temperature_id, temperature
+        )
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -97,7 +113,11 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         has_changed = False
 
         # Did we actually get a change?
-        if new_current_temperature != self._attr_current_temperature or new_target_temperature != self._attr_target_temperature or new_hvac_action != self._attr_hvac_action:
+        if (
+            new_current_temperature != self._attr_current_temperature
+            or new_target_temperature != self._attr_target_temperature
+            or new_hvac_action != self._attr_hvac_action
+        ):
             has_changed = True
 
         self._attr_current_temperature = new_current_temperature

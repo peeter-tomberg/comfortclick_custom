@@ -9,8 +9,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def read_yaml(path: str):
     full_path = f"{os.path.dirname(__file__)}/../{path}"
-    async with aiofiles.open(full_path, mode='r',
-                             encoding="utf-8") as f:
+    async with aiofiles.open(full_path, encoding="utf-8") as f:
         contents = await f.read()
     try:
         return yaml.safe_load(contents)

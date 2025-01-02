@@ -1,17 +1,24 @@
 from enum import StrEnum
 
-from homeassistant.components.sensor import SensorEntityDescription, SensorDeviceClass, SensorStateClass, SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .vent_config import VentConfig
 from ... import ComfortClickCoordinator
+from .vent_config import VentConfig
+
 
 class VentPresetModes(StrEnum):
     HOME = "Home"
     AWAY = "Away"
     GUESTS = "Guests"
+
 
 class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
     """Representation of a door with a lock entity."""
@@ -19,7 +26,9 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
     value = None
     _mode = VentPresetModes
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig) -> None:
+    def __init__(
+        self, coordinator: ComfortClickCoordinator, config: VentConfig
+    ) -> None:
         """Initialize the door sensor."""
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-temperature-sensor"
@@ -45,8 +54,12 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
 
     def _check_home_mode(self) -> bool:
         is_home_mode_on = self._coordinator.api.get_value(self._config.home_mode)
-        home_vent_temperature = self._coordinator.api.get_value(self._config.home_vent_air_temp)
-        if is_home_mode_on and (self._mode != VentPresetModes.HOME or self.value != home_vent_temperature):
+        home_vent_temperature = self._coordinator.api.get_value(
+            self._config.home_vent_air_temp
+        )
+        if is_home_mode_on and (
+            self._mode != VentPresetModes.HOME or self.value != home_vent_temperature
+        ):
             self._mode = VentPresetModes.HOME
             self.value = home_vent_temperature
             self.async_write_ha_state()
@@ -55,8 +68,12 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
 
     def _check_away_mode(self) -> bool:
         is_away_mode_on = self._coordinator.api.get_value(self._config.away_mode)
-        away_vent_temperature = self._coordinator.api.get_value(self._config.away_vent_air_temp)
-        if is_away_mode_on and (self._mode != VentPresetModes.AWAY or self.value != away_vent_temperature):
+        away_vent_temperature = self._coordinator.api.get_value(
+            self._config.away_vent_air_temp
+        )
+        if is_away_mode_on and (
+            self._mode != VentPresetModes.AWAY or self.value != away_vent_temperature
+        ):
             self._mode = VentPresetModes.AWAY
             self.value = away_vent_temperature
             self.async_write_ha_state()
@@ -65,8 +82,12 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
 
     def _check_guest_mode(self) -> bool:
         is_guest_mode_on = self._coordinator.api.get_value(self._config.guest_mode)
-        guest_vent_temperature = self._coordinator.api.get_value(self._config.guest_vent_air_temp)
-        if is_guest_mode_on and (self._mode != VentPresetModes.GUESTS or self.value != guest_vent_temperature):
+        guest_vent_temperature = self._coordinator.api.get_value(
+            self._config.guest_vent_air_temp
+        )
+        if is_guest_mode_on and (
+            self._mode != VentPresetModes.GUESTS or self.value != guest_vent_temperature
+        ):
             self._mode = VentPresetModes.GUESTS
             self.value = guest_vent_temperature
             self.async_write_ha_state()
@@ -82,5 +103,3 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
             return
         if self._check_guest_mode():
             return
-
-

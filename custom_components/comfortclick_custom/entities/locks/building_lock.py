@@ -9,6 +9,7 @@ from ... import ComfortClickCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+
 @dataclass
 class BuildingLockConfig:
     """Class for keeping track of an item in inventory."""
@@ -20,7 +21,9 @@ class BuildingLockConfig:
 class BuildingLock(CoordinatorEntity, LockEntity):
     """Representation of a door with a lock entity."""
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: BuildingLockConfig) -> None:
+    def __init__(
+        self, coordinator: ComfortClickCoordinator, config: BuildingLockConfig
+    ) -> None:
         super().__init__(coordinator)
         """Initialize the door sensor."""
         # coordinator that manages state
@@ -55,7 +58,6 @@ class BuildingLock(CoordinatorEntity, LockEntity):
         _LOGGER.debug("Unlocking door")
         await self.unlock_door()
         self.mark_door_as(True)
-        return None
 
     async def async_lock(self, **kwargs) -> None:
         return None

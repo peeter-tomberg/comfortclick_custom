@@ -5,15 +5,17 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .vent_config import VentConfig
 from ... import ComfortClickCoordinator
+from .vent_config import VentConfig
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class VentPresetModes(StrEnum):
     HOME = "Home"
     AWAY = "Away"
     GUESTS = "Guests"
+
 
 class VentModeSelect(CoordinatorEntity, SelectEntity):
     """Representation of a door with a lock entity."""
@@ -21,7 +23,9 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
     current_option = None | VentPresetModes
     options = [VentPresetModes.AWAY, VentPresetModes.HOME, VentPresetModes.GUESTS]
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig) -> None:
+    def __init__(
+        self, coordinator: ComfortClickCoordinator, config: VentConfig
+    ) -> None:
         """Initialize the door sensor."""
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-mode-select"
@@ -46,7 +50,7 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
 
     def _check_home_mode(self):
         is_home_mode_on = self._coordinator.api.get_value(self._config.home_mode)
-        if is_home_mode_on and self.current_option!= VentPresetModes.HOME:
+        if is_home_mode_on and self.current_option != VentPresetModes.HOME:
             self.current_option = VentPresetModes.HOME
             self.async_write_ha_state()
             return True
@@ -77,5 +81,3 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
             return
         if self._check_guest_mode():
             return
-
-

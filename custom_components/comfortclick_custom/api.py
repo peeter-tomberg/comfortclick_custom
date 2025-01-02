@@ -1,15 +1,17 @@
+import json
 import logging
+import time
+import typing
 
 import aiohttp
-import typing
-import time
-import json
 
 _LOGGER = logging.getLogger(__name__)
+
 
 # Since keys contain \\ and python handles strings differently
 def sanitise_device_name(device_name: str):
     return device_name.replace("\\\\", "\\")
+
 
 def compare_device_names(a: str, b: str) -> bool:
     return sanitise_device_name(a) == sanitise_device_name(b)
@@ -36,20 +38,25 @@ class ApiInstance:
         payload = {
             "objectName": sanitise_device_name(device_name),
             "valueName": "Value",
-            "value": value
+            "value": value,
         }
         url = f"{self._host}/SetValue"
-        _LOGGER.info(msg=f"Changing api state {device_name} - {value} - {json.dumps(payload, separators=(',', ':'))}")
+        _LOGGER.info(
+            msg=f"Changing api state {device_name} - {value} - {json.dumps(payload, separators=(',', ':'))}"
+        )
         async with aiohttp.ClientSession(headers=self._authorized_headers) as session:
             async with session.post(url, json=payload, ssl=False) as response:
                 if response.status != 200:
-                    raise Exception(f"Failed to set value: {response.status} {await response.text()}")
+                    raise Exception(
+                        f"Failed to set value: {response.status} {await response.text()}"
+                    )
                 result = await response.json()
-                _LOGGER.info(msg=f"Changed api state {device_name} - {value} - {json.dumps(result, separators=(',', ':'))}")
+                _LOGGER.info(
+                    msg=f"Changed api state {device_name} - {value} - {json.dumps(result, separators=(',', ':'))}"
+                )
                 return result
 
-
-# Reads value from internal state
+    # Reads value from internal state
     def get_value(self, device_name: str):
         value = None
         for item in self._state:
@@ -58,10 +65,14 @@ class ApiInstance:
 
         _LOGGER.info(msg=f"Getting value from internal state - {device_name} - {value}")
         if value is None:
-            _LOGGER.info("------------------------ NOT FOUND ----------------------------")
+            _LOGGER.info(
+                "------------------------ NOT FOUND ----------------------------"
+            )
             for item in self._state:
-                _LOGGER.info(fr"{item.get("DeviceName")} - {item.get("Value")}")
-            _LOGGER.info("------------------------ NOT FOUND ----------------------------")
+                _LOGGER.info(rf"{item.get("DeviceName")} - {item.get("Value")}")
+            _LOGGER.info(
+                "------------------------ NOT FOUND ----------------------------"
+            )
         return value
 
     # Login to ComfortClick API, fetch initial state
@@ -87,7 +98,9 @@ class ApiInstance:
         async with aiohttp.ClientSession(headers=default_headers) as session:
             async with session.post(login_url, json=body, ssl=False) as response:
                 if response.status != 200:
-                    raise Exception(f"Failed to login: {response.status} {await response.text()}")
+                    raise Exception(
+                        f"Failed to login: {response.status} {await response.text()}"
+                    )
 
                 login_response = await response.json()
                 if login_response.get("Status") != "OK":
@@ -114,7 +127,9 @@ class ApiInstance:
         async with aiohttp.ClientSession(headers=self._authorized_headers) as session:
             async with session.post(url, json=body, ssl=False) as response:
                 if response.status != 200:
-                    raise Exception(f"Failed to initialize state: {response.status} {await response.text()}")
+                    raise Exception(
+                        f"Failed to initialize state: {response.status} {await response.text()}"
+                    )
                 data = await response.json()
                 self._state = data.get("ThemeObject", {}).get("ValueUpdates", [])
                 _LOGGER.info(f"Loaded initial state {json.dumps(self._state)}")
@@ -125,12 +140,14 @@ class ApiInstance:
         async with aiohttp.ClientSession(headers=self._authorized_headers) as session:
             async with session.post(url, ssl=False) as response:
                 if response.status != 200:
-                    raise Exception(f"Polling failed: {response.status} {await response.text()}")
+                    raise Exception(
+                        f"Polling failed: {response.status} {await response.text()}"
+                    )
 
                 response_data = await response.json()
-                for item in response_data.get('PropertyUpdates', []):
-                    if item.get('PropertyName') == "Value":
-                        self._set_state_value(item.get('DeviceName'), item.get('Value'))
+                for item in response_data.get("PropertyUpdates", []):
+                    if item.get("PropertyName") == "Value":
+                        self._set_state_value(item.get("DeviceName"), item.get("Value"))
 
     # Logs you out
     async def disconnect(self):
@@ -140,4 +157,6 @@ class ApiInstance:
         async with aiohttp.ClientSession(headers=self._authorized_headers) as session:
             async with session.get(url, ssl=False) as response:
                 if response.status != 200:
-                    raise Exception(f"Failed to logout: {response.status} {await response.text()}")
+                    raise Exception(
+                        f"Failed to logout: {response.status} {await response.text()}"
+                    )
