@@ -1,3 +1,5 @@
+"""Exposes vent temperature control to home assistant."""
+
 import logging
 from enum import StrEnum
 
@@ -12,15 +14,19 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class VentTempModes(StrEnum):
+    """Available vent temperature modes in comfort click."""
+
     WARM_AIR = "Warm air"
     COLD_AIR = "Cold air"
 
 
 class VentTempSelect(CoordinatorEntity, SelectEntity):
-    """Representation of a door with a lock entity."""
+    """Enables home assistant to choose between temp modes."""
 
     current_option = None | VentTempModes
-    options = [VentTempModes.WARM_AIR, VentTempModes.COLD_AIR]
+    options: list[VentTempModes] = frozenset(
+        [VentTempModes.WARM_AIR, VentTempModes.COLD_AIR]
+    )
 
     def __init__(
         self, coordinator: ComfortClickCoordinator, config: VentConfig
@@ -37,7 +43,7 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
         # start listener on coordinator
         super().__init__(coordinator)
 
-    def update_mode(self, is_winter_mode_on: bool):
+    def _update_mode(self, is_winter_mode_on: bool) -> None:
         if is_winter_mode_on and self.current_option != VentTempModes.WARM_AIR:
             _LOGGER.warning("Setting mode to warm air from update_mode")
             self.current_option = VentTempModes.WARM_AIR
@@ -52,11 +58,15 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
         _LOGGER.warning(f"Changing option to {option}")
         # If we want warm air pushing in, we should turn winter mode on
         if option == VentTempModes.WARM_AIR:
-            self.update_mode(is_winter_mode_on=True)
-            await self._coordinator.api.set_value(self._config.vent_winter_mode, True)
+            self._update_mode(is_winter_mode_on=True)
+            await self._coordinator.api.set_value(
+                self._config.vent_winter_mode, value=True
+            )
         if option == VentTempModes.COLD_AIR:
-            self.update_mode(is_winter_mode_on=False)
-            await self._coordinator.api.set_value(self._config.vent_winter_mode, False)
+            self._update_mode(is_winter_mode_on=False)
+            await self._coordinator.api.set_value(
+                self._config.vent_winter_mode, value=False
+            )
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -65,4 +75,4 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
         is_winter_mode_on = self._coordinator.api.get_value(
             self._config.vent_winter_mode
         )
-        self.update_mode(is_winter_mode_on=is_winter_mode_on)
+        self._update_mode(is_winter_mode_on=is_winter_mode_on)

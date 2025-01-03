@@ -33,6 +33,6 @@ class ComfortClickCoordinator(DataUpdateCoordinator):
         await self.api.initialize_state()
         _LOGGER.info("Connected and fetched initial state")
 
-    async def async_update_data(self):
+    async def async_update_data(self) -> None:
         _LOGGER.info("Polling API for latest state")
         await self.api.poll()

@@ -1,3 +1,5 @@
+"""Utility helper to read utilities yaml config file."""
+
 import logging
 
 from ..entities.utilities.utilities_sensor import (
@@ -11,25 +13,31 @@ from .read_yaml import read_yaml
 _LOGGER = logging.getLogger(__name__)
 
 
-def map_type_to_description(type: str):
-    if type == "water":
+class UnknownDescriptionTypeError(Exception):
+    """Raised when unknown description is provided in YAML configuration file."""
+
+
+def _map_type_to_description(
+    utility_type: str,
+) -> WaterSensor | ElectricitySensor | HeatingSensor:
+    if utility_type == "water":
         return WaterSensor
-    if type == "electricity":
+    if utility_type == "electricity":
         return ElectricitySensor
-    if type == "heating":
+    if utility_type == "heating":
         return HeatingSensor
-    Exception(f"Unknown type - {type}")
+    raise UnknownDescriptionTypeError(utility_type)
 
 
 async def load_utilities_config() -> list[UtilitiesSensorConfig]:
+    """Read utilities config file."""
     data = await read_yaml("/config/utilities.yaml")
-    return list(
-        map(
-            lambda item: UtilitiesSensorConfig(
-                id=item.get("id", None),
-                name=item.get("name", None),
-                description=map_type_to_description(item["type"]),
-            ),
-            data.get("utilities", []),
+
+    return [
+        UtilitiesSensorConfig(
+            id=item.get("id", None),
+            name=item.get("name", None),
+            description=_map_type_to_description(item["type"]),
         )
-    )
+        for item in data.get("utilities", [])
+    ]

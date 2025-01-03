@@ -51,7 +51,7 @@ class RoomFan(CoordinatorEntity, FanEntity):
         """Return true if the entity is on."""
         return self._attr_is_on
 
-    def get_fan_state_from_api_state(self):
+    def _get_fan_state_from_api_state(self) -> bool:
         # Fan will not turn on if heating is on
         if self._coordinator.api.get_value(self._config.heating_id):
             return False
@@ -68,18 +68,18 @@ class RoomFan(CoordinatorEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn on the fan."""
-        await self._coordinator.api.set_value(self._config.lock_id, False)
+        await self._coordinator.api.set_value(self._config.lock_id, value=False)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the fan off."""
-        await self._coordinator.api.set_value(self._config.lock_id, True)
+        await self._coordinator.api.set_value(self._config.lock_id, value=True)
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
         _LOGGER.info("Received update from coordinator")
 
-        new_is_on = self.get_fan_state_from_api_state()
+        new_is_on = self._get_fan_state_from_api_state()
         has_changed = False
 
         # Did we actually get a change?

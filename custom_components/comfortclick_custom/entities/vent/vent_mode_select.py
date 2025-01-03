@@ -1,3 +1,5 @@
+"""Exposes vent mode control to home assistant."""
+
 import logging
 from enum import StrEnum
 
@@ -12,16 +14,20 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class VentPresetModes(StrEnum):
+    """Available vent modes in comfort click."""
+
     HOME = "Home"
     AWAY = "Away"
     GUESTS = "Guests"
 
 
 class VentModeSelect(CoordinatorEntity, SelectEntity):
-    """Representation of a door with a lock entity."""
+    """Enables home assistant to choose between vent modes."""
 
     current_option = None | VentPresetModes
-    options = [VentPresetModes.AWAY, VentPresetModes.HOME, VentPresetModes.GUESTS]
+    options: list[VentPresetModes] = frozenset(
+        [VentPresetModes.AWAY, VentPresetModes.HOME, VentPresetModes.GUESTS]
+    )
 
     def __init__(
         self, coordinator: ComfortClickCoordinator, config: VentConfig
@@ -42,13 +48,13 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
         """Change the selected option."""
         _LOGGER.warning(f"Changing option to {option}")
         if option == VentPresetModes.HOME:
-            await self._coordinator.api.set_value(self._config.home_mode, True)
+            await self._coordinator.api.set_value(self._config.home_mode, value=True)
         if option == VentPresetModes.AWAY:
-            await self._coordinator.api.set_value(self._config.away_mode, True)
+            await self._coordinator.api.set_value(self._config.away_mode, value=True)
         if option == VentPresetModes.GUESTS:
-            await self._coordinator.api.set_value(self._config.guest_mode, True)
+            await self._coordinator.api.set_value(self._config.guest_mode, value=True)
 
-    def _check_home_mode(self):
+    def _check_home_mode(self) -> bool:
         is_home_mode_on = self._coordinator.api.get_value(self._config.home_mode)
         if is_home_mode_on and self.current_option != VentPresetModes.HOME:
             self.current_option = VentPresetModes.HOME
@@ -56,7 +62,7 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
             return True
         return False
 
-    def _check_away_mode(self):
+    def _check_away_mode(self) -> bool:
         is_away_mode_on = self._coordinator.api.get_value(self._config.away_mode)
         if is_away_mode_on and self.current_option != VentPresetModes.AWAY:
             self.current_option = VentPresetModes.AWAY
@@ -64,7 +70,7 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
             return True
         return False
 
-    def _check_guest_mode(self):
+    def _check_guest_mode(self) -> bool:
         is_guest_mode_on = self._coordinator.api.get_value(self._config.guest_mode)
         if is_guest_mode_on and self.current_option != VentPresetModes.GUESTS:
             self.current_option = VentPresetModes.GUESTS

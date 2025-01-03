@@ -1,3 +1,5 @@
+"""Exposes vent temperature to home assistant."""
+
 from enum import StrEnum
 
 from homeassistant.components.sensor import (
@@ -15,13 +17,15 @@ from .vent_config import VentConfig
 
 
 class VentPresetModes(StrEnum):
+    """Available vent modes in comfort click."""
+
     HOME = "Home"
     AWAY = "Away"
     GUESTS = "Guests"
 
 
 class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a door with a lock entity."""
+    """Representation of a sensor that reports the vent temperature."""
 
     value = None
     _mode = VentPresetModes
@@ -48,7 +52,7 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
 
     @property
-    def native_value(self):
+    def native_value(self) -> int:
         """Return the state of the sensor."""
         return self.value
 

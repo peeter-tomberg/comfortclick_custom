@@ -1,3 +1,5 @@
+"""Utility helper to read vent yaml config file."""
+
 import logging
 
 from ..entities.vent.vent_config import VentConfig
@@ -7,6 +9,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def load_vent_config() -> VentConfig:
+    """Read vent config file."""
     item = await read_yaml("/config/vent.yaml")
     return VentConfig(
         vent_winter_mode=item.get("vent_winter_mode", None),

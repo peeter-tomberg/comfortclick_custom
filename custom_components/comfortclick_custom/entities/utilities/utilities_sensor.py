@@ -1,3 +1,5 @@
+"""Exposes utilities sensors to home assistant."""
+
 import logging
 from dataclasses import dataclass
 
@@ -39,7 +41,7 @@ HeatingSensor = SensorEntityDescription(
 
 @dataclass
 class UtilitiesSensorConfig:
-    """Class for keeping track of an item in inventory."""
+    """Class for keeping all configuration options."""
 
     id: str = None
     name: str = None
@@ -47,7 +49,7 @@ class UtilitiesSensorConfig:
 
 
 class UtilitiesSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a door with a lock entity."""
+    """Representation of a sensor that reports utilities."""
 
     value = None
 
@@ -68,7 +70,7 @@ class UtilitiesSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
 
     @property
-    def native_value(self):
+    def native_value(self) -> bool:
         """Return the state of the sensor."""
         return self._coordinator.api.get_value(self._attr_unique_id)
 

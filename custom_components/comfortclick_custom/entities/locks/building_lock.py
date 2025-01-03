@@ -12,7 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class BuildingLockConfig:
-    """Class for keeping track of an item in inventory."""
+    """Class for keeping all configuration options."""
 
     door_name: str = None
     door_id: str = None
@@ -42,22 +42,22 @@ class BuildingLock(CoordinatorEntity, LockEntity):
     def is_open(self) -> bool:
         return self._attr_is_open
 
-    async def unlock_door(self):
-        await self._coordinator.api.set_value(self._config.door_id, True)
+    async def _unlock_door(self) -> None:
+        await self._coordinator.api.set_value(self._config.door_id, value=True)
 
-    def mark_door_as(self, is_open: bool):
+    def _mark_door_as(self, is_open: bool) -> None:
         _LOGGER.debug(f"Marking door is_open as {is_open}")
         self._attr_is_open = is_open
         self.async_write_ha_state()
 
     # The front door is by default locked and can be unlocked for a bit
-    def get_is_open_from_api_state(self):
+    def _get_is_open_from_api_state(self) -> bool:
         return self._coordinator.api.get_value(self._config.door_id)
 
     async def async_unlock(self, **kwargs) -> None:
         _LOGGER.debug("Unlocking door")
-        await self.unlock_door()
-        self.mark_door_as(True)
+        await self._unlock_door()
+        self._mark_door_as(is_open=True)
 
     async def async_lock(self, **kwargs) -> None:
         return None
@@ -65,6 +65,6 @@ class BuildingLock(CoordinatorEntity, LockEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        updated_state_is_open = self.get_is_open_from_api_state()
+        updated_state_is_open = self._get_is_open_from_api_state()
         if updated_state_is_open != self.is_open:
-            self.mark_door_as(updated_state_is_open)
+            self._mark_door_as(updated_state_is_open)

@@ -37,7 +37,7 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
     # Entity properties
     _attr_should_poll = False
     # ClimateEntity properties
-    _attr_hvac_modes = [HVACMode.HEAT_COOL]
+    _attr_hvac_modes = frozenset[HVACMode.HEAT_COOL]
     _attr_hvac_mode = HVACMode.HEAT_COOL
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -66,7 +66,7 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
 
         _LOGGER.info("Finished setting up ac")
 
-    def get_hvac_action_from_api_state(self):
+    def _get_hvac_action_from_api_state(self) -> HVACAction:
         if self._coordinator.api.get_value(self._config.heating_id):
             return HVACAction.HEATING
         # If we have no fan, we cant cool
@@ -77,7 +77,7 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
             return HVACAction.COOLING
         return HVACAction.IDLE
 
-    def get_current_temperature_from_api_state(self):
+    def _get_current_temperature_from_api_state(self) -> float:
         current_temperature = self._coordinator.api.get_value(
             self._config.current_temperature_id
         )
@@ -85,7 +85,7 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
             return 0
         return round(float(current_temperature), 1)
 
-    def get_target_temperature_from_api_state(self):
+    def _get_target_temperature_from_api_state(self) -> float:
         target_temperature = self._coordinator.api.get_value(
             self._config.target_temperature_id
         )
@@ -107,9 +107,9 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         """Fetch new state data for the sensor."""
         _LOGGER.info("Received update from coordinator")
 
-        new_current_temperature = self.get_current_temperature_from_api_state()
-        new_target_temperature = self.get_target_temperature_from_api_state()
-        new_hvac_action = self.get_hvac_action_from_api_state()
+        new_current_temperature = self._get_current_temperature_from_api_state()
+        new_target_temperature = self._get_target_temperature_from_api_state()
+        new_hvac_action = self._get_hvac_action_from_api_state()
         has_changed = False
 
         # Did we actually get a change?
