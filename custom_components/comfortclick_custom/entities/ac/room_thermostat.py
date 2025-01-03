@@ -35,9 +35,9 @@ class RoomThermostatConfig:
     max_temp: int = 24
 
 
-# Some fans return 0 when off, some return 2, some return 49 when on turned on,
-# some return 10. I think it might be fan speed
+# 5 is considered off, anything above 5 is on
 FAN_ON_THRESHOLD = 5
+FAN_TEMP_DIFF_THRESHOLD = 0.25
 
 
 class RoomThermostat(CoordinatorEntity, ClimateEntity):
