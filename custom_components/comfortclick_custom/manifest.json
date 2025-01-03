@@ -3,10 +3,13 @@
   "name": "ConfortClick Custom Integration",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": {
+
+  },
   "documentation": "https://github.com/peeter-tomberg/comfortclick_custom",
   "homekit": {},
-  "iot_class": "local_push",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
   "requirements": [],
   "ssdp": [],
   "version": "0.1.0",
