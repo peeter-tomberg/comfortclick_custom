@@ -33,7 +33,7 @@ def _map_type_to_description(
 
 async def load_utilities_config() -> list[UtilitiesSensorConfig]:
     """Read utilities config file."""
-    data = await read_yaml("/config/utilities.yaml")
+    data = await read_yaml()
 
     return [
         UtilitiesSensorConfig(

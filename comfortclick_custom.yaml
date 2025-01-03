@@ -1,0 +1,62 @@
+fans:
+  - name: "Bedroom fan"
+    lock_id: ""
+    fan_id: ""
+    heating_id: ""
+  - name: "Living room fan"
+    lock_id: ""
+    fan_id: ""
+    heating_id: ""
+
+locks:
+  - door_name: "Main door"
+    door_id: ""
+  - door_name: "Cellar door"
+    door_id: ""
+
+thermostats:
+  - name: "Bedroom AC"
+    heating_id: ""
+    fan_id: ""
+    current_temperature_id: ""
+    target_temperature_id: ""
+  - name: "Living room AC"
+    heating_id: ""
+    fan_id: ""
+    current_temperature_id: ""
+    target_temperature_id: ""
+  - name: "Bathroom AC"
+    heating_id: ""
+    fan_id: ""
+    current_temperature_id: ""
+    target_temperature_id: ""
+    max_temp: 28
+
+utilities:
+  - name: "Water (cold, total)"
+    id: "Devices\\ANYBUS MAJA 2\\ModbusSlave (13)\\KRT 27 KÜLM 18388255"
+    type: "water"
+  - name: "Water (hot, total)"
+    id: "Devices\\ANYBUS MAJA 2\\ModbusSlave (18)\\KRT 27 SOE 18388555"
+    type: "water"
+  - name: "Electricity (day, total)"
+    id: "Devices\\ANYBUS MAJA 2\\ModbusSlave (39)\\KRT 27 ELEKTER T2 PÄEV 5667306"
+    type: "electricity"
+  - name: "Electricity (night, total)"
+    id: "Devices\\ANYBUS MAJA 2\\ModbusSlave (39)\\KRT 27 ELEKTER T1 ÖÖ 5667306"
+    type: "electricity"
+  - name: "Heating (total)"
+    id: "Devices\\ANYBUS MAJA 2\\ModbusSlave (78)\\KRT 27 KÜTE 67277630"
+    type: "heating"
+
+
+vent:
+  away_mode: ""
+  home_mode: ""
+  guest_mode: ""
+
+  away_vent_air_temp: ""
+  home_vent_air_temp: ""
+  guest_vent_air_temp: ""
+
+  vent_winter_mode: ""

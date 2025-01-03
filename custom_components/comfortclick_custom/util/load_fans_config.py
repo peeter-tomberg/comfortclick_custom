@@ -10,7 +10,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def load_fans_config() -> list[RoomFanConfig]:
     """Read fans config file."""
-    data = await read_yaml("/config/fans.yaml")
+    data = await read_yaml()
     return [
         RoomFanConfig(
             name=item.get("name", None),
