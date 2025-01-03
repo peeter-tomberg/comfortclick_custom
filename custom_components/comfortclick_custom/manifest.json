@@ -4,13 +4,8 @@
   "codeowners": [],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "",
-  "homekit": {
-    "supported_features": [
-      "climate",
-      "lock"
-    ]
-  },
+  "documentation": "https://github.com/peeter-tomberg/comfortclick_custom",
+  "homekit": {},
   "iot_class": "local_push",
   "requirements": [],
   "ssdp": [],
