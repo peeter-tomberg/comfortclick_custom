@@ -12,6 +12,9 @@ from ... import ComfortClickCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+FAN_ON_THRESHOLD = 5
+FAN_TEMP_DIFF_THRESHOLD = 0.25
+
 
 @dataclass
 class RoomFanConfig:
@@ -21,6 +24,9 @@ class RoomFanConfig:
     heating_id: str
     lock_id: str
     fan_id: str
+
+    current_temperature_id: str
+    target_temperature_id: str
 
 
 class RoomFan(CoordinatorEntity, FanEntity):
@@ -58,11 +64,40 @@ class RoomFan(CoordinatorEntity, FanEntity):
         return self._attr_is_on
 
     def _get_fan_state_from_api_state(self) -> bool:
-        # Fan will not turn on if heating is on
+        # If lock is on, fan cant be on
+        if not self._coordinator.api.get_value(self._config.lock_id):
+            return False
+        # If heating is on, fan cant be on
         if self._coordinator.api.get_value(self._config.heating_id):
             return False
-        # Fans use a lock mechanism, so off means lock is off meaning device is on
-        return not self._coordinator.api.get_value(self._config.lock_id)
+
+        # If heating is off, meaning current temp is same or lower than target temp
+        # Now we are trying to optimistically assume fan state based on temp
+        current_temp = self._get_current_temperature_from_api_state()
+        target_temp = self._get_target_temperature_from_api_state()
+
+        if current_temp - target_temp < FAN_TEMP_DIFF_THRESHOLD:
+            return False
+
+        # Fall back to rely on comfort click logic
+
+        return self._coordinator.api.get_value(self._config.fan_id) > FAN_ON_THRESHOLD
+
+    def _get_current_temperature_from_api_state(self) -> float:
+        current_temperature = self._coordinator.api.get_value(
+            self._config.current_temperature_id
+        )
+        if current_temperature is None:
+            return 0
+        return round(float(current_temperature), 1)
+
+    def _get_target_temperature_from_api_state(self) -> float:
+        target_temperature = self._coordinator.api.get_value(
+            self._config.target_temperature_id
+        )
+        if target_temperature is None:
+            return 0
+        return round(float(target_temperature), 1)
 
     async def async_turn_on(
         self,

@@ -40,6 +40,10 @@ async def test_fans_config_loader():
     assert isinstance(configs[1], RoomFanConfig)
     assert configs[0].name == "Bedroom fan"
     assert configs[1].name == "Living room fan"
+    assert configs[0].current_temperature_id == ""
+    assert configs[1].current_temperature_id == ""
+    assert configs[0].target_temperature_id == ""
+    assert configs[1].target_temperature_id == ""
 
 
 @pytest.mark.asyncio
