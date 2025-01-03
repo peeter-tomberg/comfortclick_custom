@@ -43,23 +43,19 @@ FAN_ON_THRESHOLD = 5
 class RoomThermostat(CoordinatorEntity, ClimateEntity):
     """Enables home assistant to control the room thermostat."""
 
-    # Entity properties
-    _attr_should_poll = False
-    # ClimateEntity properties
-    _attr_hvac_modes = frozenset[HVACMode.HEAT_COOL]
-    _attr_hvac_mode = HVACMode.HEAT_COOL
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    # Loaded in from coordinator
-    _attr_hvac_action = None
-    _attr_current_temperature = None
-    _attr_target_temperature = None
-
     def __init__(
         self, coordinator: ComfortClickCoordinator, config: RoomThermostatConfig
     ) -> None:
         """Initialize the AC."""
         super().__init__(coordinator)
+
+        self._attr_should_poll = False
+
+        self._attr_hvac_modes = [HVACMode.HEAT_COOL]
+        self._attr_hvac_mode = HVACMode.HEAT_COOL
+        self._attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+        self._attr_temperature_unit = UnitOfTemperature.CELSIUS
+
         # coordinator that manages state
         self._coordinator = coordinator
         self._config = config

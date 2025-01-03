@@ -26,16 +26,18 @@ class RoomFanConfig:
 class RoomFan(CoordinatorEntity, FanEntity):
     """Enables home assistant to control the room fan."""
 
-    # Entity
-    _attr_should_poll = False
-    # FanEntity
-    _attr_supported_features = FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
-    _attr_is_on = None
-
     def __init__(
         self, coordinator: ComfortClickCoordinator, config: RoomFanConfig
     ) -> None:
         """Initialize the Fan."""
+        # Entity
+        self._attr_should_poll = False
+        # FanEntity
+        self._attr_supported_features = (
+            FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
+        )
+        self._attr_is_on = None
+
         # coordinator that manages state
         self._coordinator = coordinator
         self._config = config

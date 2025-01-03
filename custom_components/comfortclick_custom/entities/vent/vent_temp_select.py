@@ -23,15 +23,13 @@ class VentTempModes(StrEnum):
 class VentTempSelect(CoordinatorEntity, SelectEntity):
     """Enables home assistant to choose between temp modes."""
 
-    current_option = None | VentTempModes
-    options: list[VentTempModes] = frozenset(
-        [VentTempModes.WARM_AIR, VentTempModes.COLD_AIR]
-    )
-
     def __init__(
         self, coordinator: ComfortClickCoordinator, config: VentConfig
     ) -> None:
-        """Initialize the door sensor."""
+        """Initialize the vent temp mode select."""
+        self._attr_options = [VentTempModes.WARM_AIR, VentTempModes.COLD_AIR]
+        self._attr_current_option = None
+
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-temp-select"
         # coordinator that manages state
@@ -46,13 +44,13 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
     def _turn_on_winter_mode(self) -> None:
         if self.current_option != VentTempModes.WARM_AIR:
             _LOGGER.debug("Setting mode to warm air")
-            self.current_option = VentTempModes.WARM_AIR
+            self._attr_current_option = VentTempModes.WARM_AIR
             self.async_write_ha_state()
 
     def _turn_off_winter_mode(self) -> None:
         if self.current_option != VentTempModes.COLD_AIR:
             _LOGGER.debug("Setting mode to cold air")
-            self.current_option = VentTempModes.COLD_AIR
+            self._attr_current_option = VentTempModes.COLD_AIR
             self.async_write_ha_state()
 
     async def async_select_option(self, option: str) -> None:

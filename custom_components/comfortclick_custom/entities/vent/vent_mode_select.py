@@ -24,15 +24,17 @@ class VentPresetModes(StrEnum):
 class VentModeSelect(CoordinatorEntity, SelectEntity):
     """Enables home assistant to choose between vent modes."""
 
-    current_option = None | VentPresetModes
-    options: list[VentPresetModes] = frozenset(
-        [VentPresetModes.AWAY, VentPresetModes.HOME, VentPresetModes.GUESTS]
-    )
-
     def __init__(
         self, coordinator: ComfortClickCoordinator, config: VentConfig
     ) -> None:
         """Initialize the door sensor."""
+        self._attr_options = [
+            VentPresetModes.AWAY,
+            VentPresetModes.HOME,
+            VentPresetModes.GUESTS,
+        ]
+        self._attr_current_option = None
+
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-mode-select"
         # coordinator that manages state
@@ -57,7 +59,7 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
     def _check_home_mode(self) -> bool:
         is_home_mode_on = self._coordinator.api.get_value(self._config.home_mode)
         if is_home_mode_on and self.current_option != VentPresetModes.HOME:
-            self.current_option = VentPresetModes.HOME
+            self._attr_current_option = VentPresetModes.HOME
             self.async_write_ha_state()
             return True
         return False
@@ -65,7 +67,7 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
     def _check_away_mode(self) -> bool:
         is_away_mode_on = self._coordinator.api.get_value(self._config.away_mode)
         if is_away_mode_on and self.current_option != VentPresetModes.AWAY:
-            self.current_option = VentPresetModes.AWAY
+            self._attr_current_option = VentPresetModes.AWAY
             self.async_write_ha_state()
             return True
         return False
@@ -73,7 +75,7 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
     def _check_guest_mode(self) -> bool:
         is_guest_mode_on = self._coordinator.api.get_value(self._config.guest_mode)
         if is_guest_mode_on and self.current_option != VentPresetModes.GUESTS:
-            self.current_option = VentPresetModes.GUESTS
+            self._attr_current_option = VentPresetModes.GUESTS
             self.async_write_ha_state()
             return True
         return False
