@@ -10,7 +10,8 @@ _LOGGER = logging.getLogger(__name__)
 
 async def load_vent_config() -> VentConfig:
     """Read vent config file."""
-    item = await read_yaml("/config/vent.yaml")
+    config = await read_yaml()
+    item = config.get("vent", {})
     return VentConfig(
         vent_winter_mode=item.get("vent_winter_mode", None),
         away_mode=item.get("away_mode", None),

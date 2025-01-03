@@ -11,10 +11,9 @@ _LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(format="%(message)s - %(full_path)s", level=logging.INFO)
 
-
-async def read_yaml(path: str) -> Any:
+async def read_yaml() -> Any:
     """Read the YAML configuration file from integrations config folder."""
-    full_path = f"{Path(__file__).parent}/../{path}"
+    full_path = f"{Path(__file__).parent}/../../../comfortclick_custom.yaml"
     async with aiofiles.open(full_path, encoding="utf-8") as f:
         contents = await f.read()
     try:

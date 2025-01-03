@@ -10,7 +10,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def load_thermostats_config() -> list[RoomThermostatConfig]:
     """Read thermostats config file."""
-    data = await read_yaml("/config/thermostats.yaml")
+    data = await read_yaml()
 
     return [
         RoomThermostatConfig(
@@ -21,7 +21,7 @@ async def load_thermostats_config() -> list[RoomThermostatConfig]:
             target_temperature_id=item.get("target_temperature_id", None),
             target_temperature_step=float(item.get("target_temperature_step", 0.5)),
             min_temp=int(item.get("min_temp", 18)),
-            max_temp=int(item.get("max_temp", 28)),
+            max_temp=int(item.get("max_temp", 24)),
         )
         for item in data.get("thermostats", [])
     ]
