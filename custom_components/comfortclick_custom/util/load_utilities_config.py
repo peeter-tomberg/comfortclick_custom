@@ -2,6 +2,8 @@
 
 import logging
 
+from homeassistant.components.sensor import SensorEntityDescription
+
 from ..entities.utilities.utilities_sensor import (
     ElectricitySensor,
     HeatingSensor,
@@ -19,7 +21,7 @@ class UnknownDescriptionTypeError(Exception):
 
 def _map_type_to_description(
     utility_type: str,
-) -> WaterSensor | ElectricitySensor | HeatingSensor:
+) -> SensorEntityDescription:
     if utility_type == "water":
         return WaterSensor
     if utility_type == "electricity":
