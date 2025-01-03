@@ -43,27 +43,29 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
         # start listener on coordinator
         super().__init__(coordinator)
 
-    def _update_mode(self, is_winter_mode_on: bool) -> None:
-        if is_winter_mode_on and self.current_option != VentTempModes.WARM_AIR:
-            _LOGGER.warning("Setting mode to warm air from update_mode")
+    def _turn_on_winter_mode(self) -> None:
+        if self.current_option != VentTempModes.WARM_AIR:
+            _LOGGER.debug("Setting mode to warm air")
             self.current_option = VentTempModes.WARM_AIR
             self.async_write_ha_state()
-        if not is_winter_mode_on and self.current_option != VentTempModes.COLD_AIR:
-            _LOGGER.warning("Setting mode to cold air from update_mode")
+
+    def _turn_off_winter_mode(self) -> None:
+        if self.current_option != VentTempModes.COLD_AIR:
+            _LOGGER.debug("Setting mode to cold air")
             self.current_option = VentTempModes.COLD_AIR
             self.async_write_ha_state()
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        _LOGGER.warning(f"Changing option to {option}")
+        _LOGGER.debug(msg="Changing option", extra={"option": option})
         # If we want warm air pushing in, we should turn winter mode on
         if option == VentTempModes.WARM_AIR:
-            self._update_mode(is_winter_mode_on=True)
+            self._turn_on_winter_mode()
             await self._coordinator.api.set_value(
                 self._config.vent_winter_mode, value=True
             )
         if option == VentTempModes.COLD_AIR:
-            self._update_mode(is_winter_mode_on=False)
+            self._turn_off_winter_mode()
             await self._coordinator.api.set_value(
                 self._config.vent_winter_mode, value=False
             )
@@ -75,4 +77,7 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
         is_winter_mode_on = self._coordinator.api.get_value(
             self._config.vent_winter_mode
         )
-        self._update_mode(is_winter_mode_on=is_winter_mode_on)
+        if is_winter_mode_on:
+            self._turn_on_winter_mode()
+        else:
+            self._turn_off_winter_mode()

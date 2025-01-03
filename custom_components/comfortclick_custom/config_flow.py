@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant import config_entries, exceptions
@@ -12,10 +12,13 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_USERNAME,
 )
-from homeassistant.core import HomeAssistant
 
 from .api import ApiInstance
 from .const import DOMAIN
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,14 +32,16 @@ DATA_SCHEMA = vol.Schema(
     }
 )
 
+MIN_HOST_LENGTH = 3
 
-async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
+
+async def validate_input(_hass: HomeAssistant, data: dict) -> dict[str, Any]:
     """
     Validate the user input allows us to connect.
 
     Data has the keys from DATA_SCHEMA with values provided by the user.
     """
-    if len(data[CONF_HOST]) < 3:
+    if len(data[CONF_HOST]) < MIN_HOST_LENGTH:
         raise InvalidHost
 
     api = ApiInstance(data[CONF_USERNAME], data[CONF_PASSWORD], data[CONF_HOST])
@@ -54,7 +59,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_PUSH
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input: dict | None = None) -> Any:
         """Handle the initial step."""
         errors = {}
         if user_input is not None:

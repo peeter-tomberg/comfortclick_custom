@@ -1,3 +1,5 @@
+"""Coordinator object class."""
+
 import logging
 from datetime import timedelta
 
@@ -11,6 +13,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ComfortClickCoordinator(DataUpdateCoordinator):
+    """Coordinator object that has subscribers who ask it for latest data."""
+
     def __init__(
         self, hass: HomeAssistant, host: str, username: str, password: str
     ) -> None:
@@ -34,5 +38,6 @@ class ComfortClickCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Connected and fetched initial state")
 
     async def async_update_data(self) -> None:
+        """Update data every 1 second."""
         _LOGGER.info("Polling API for latest state")
         await self.api.poll()

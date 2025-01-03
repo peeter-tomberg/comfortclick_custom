@@ -1,3 +1,5 @@
+"""Exposes thermostats to home assistant."""
+
 import logging
 from dataclasses import dataclass
 
@@ -18,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class RoomThermostatConfig:
-    """Class for keeping track of an item in inventory."""
+    """Class for keeping room thermostat configuration options."""
 
     name: str | None
     heating_id: str
@@ -33,7 +35,14 @@ class RoomThermostatConfig:
     max_temp: int = 24
 
 
+# Some fans return 0 when off, some return 2, some return 49 when on turned on,
+# some return 10. I think it might be fan speed
+FAN_ON_THRESHOLD = 5
+
+
 class RoomThermostat(CoordinatorEntity, ClimateEntity):
+    """Enables home assistant to control the room thermostat."""
+
     # Entity properties
     _attr_should_poll = False
     # ClimateEntity properties
@@ -64,7 +73,7 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         self._attr_max_temp = config.max_temp
         # start listener on coordinator
 
-        _LOGGER.info("Finished setting up ac")
+        _LOGGER.debug("Finished setting up")
 
     def _get_hvac_action_from_api_state(self) -> HVACAction:
         if self._coordinator.api.get_value(self._config.heating_id):
@@ -72,8 +81,7 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         # If we have no fan, we cant cool
         if self._config.fan_id is None:
             return HVACAction.IDLE
-        # Some fans return 0 when off, some return 2, some return 49 when on turned on, some return 10. I think it might be fan speed
-        if self._coordinator.api.get_value(self._config.fan_id) > 5:
+        if self._coordinator.api.get_value(self._config.fan_id) > FAN_ON_THRESHOLD:
             return HVACAction.COOLING
         return HVACAction.IDLE
 
@@ -94,10 +102,10 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         return round(float(target_temperature), 1)
 
     # Set target temperature
-    async def async_set_temperature(self, **kwargs):
+    async def async_set_temperature(self, **kwargs: int) -> None:
         """Set new target temperature."""
         temperature = kwargs["temperature"]
-        _LOGGER.info(f"Updating target temperature to {temperature}")
+        _LOGGER.debug("Updating target temperature", extra={"temperature": temperature})
         await self._coordinator.api.set_value(
             self._config.target_temperature_id, temperature
         )
@@ -105,7 +113,7 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        _LOGGER.info("Received update from coordinator")
+        _LOGGER.debug("Received update from coordinator")
 
         new_current_temperature = self._get_current_temperature_from_api_state()
         new_target_temperature = self._get_target_temperature_from_api_state()
@@ -126,5 +134,5 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
 
         # Sync state to HomeAssistant
         if has_changed:
-            _LOGGER.info("Updating HA states for ac")
+            _LOGGER.debug("Updating HA states")
             self.async_write_ha_state()

@@ -46,7 +46,7 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        _LOGGER.warning(f"Changing option to {option}")
+        _LOGGER.debug(msg="Changing option", extra={"option": option})
         if option == VentPresetModes.HOME:
             await self._coordinator.api.set_value(self._config.home_mode, value=True)
         if option == VentPresetModes.AWAY:

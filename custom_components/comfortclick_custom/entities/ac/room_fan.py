@@ -1,3 +1,5 @@
+"""Exposes fans to home assistant."""
+
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -13,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class RoomFanConfig:
-    """Class for keeping track of an item in inventory."""
+    """Class for keeping room fan configuration options."""
 
     name: str
     heating_id: str
@@ -22,6 +24,8 @@ class RoomFanConfig:
 
 
 class RoomFan(CoordinatorEntity, FanEntity):
+    """Enables home assistant to control the room fan."""
+
     # Entity
     _attr_should_poll = False
     # FanEntity
@@ -44,7 +48,7 @@ class RoomFan(CoordinatorEntity, FanEntity):
         # start listener on coordinator
         super().__init__(coordinator)
 
-        _LOGGER.info("Finished setting up fan")
+        _LOGGER.debug("Finished setting up")
 
     @property
     def is_on(self) -> bool | None:
@@ -56,28 +60,26 @@ class RoomFan(CoordinatorEntity, FanEntity):
         if self._coordinator.api.get_value(self._config.heating_id):
             return False
         # Fans use a lock mechanism, so off means lock is off meaning device is on
-        if not self._coordinator.api.get_value(self._config.lock_id):
-            return True
-        return False
+        return not self._coordinator.api.get_value(self._config.lock_id)
 
     async def async_turn_on(
         self,
-        speed: str | None = None,
-        percentage: int | None = None,
-        preset_mode: str | None = None,
-        **kwargs: Any,
+        _speed: str | None = None,
+        _percentage: int | None = None,
+        _preset_mode: str | None = None,
+        **_kwargs: Any,
     ) -> None:
         """Turn on the fan."""
         await self._coordinator.api.set_value(self._config.lock_id, value=False)
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **_kwargs: Any) -> None:
         """Turn the fan off."""
         await self._coordinator.api.set_value(self._config.lock_id, value=True)
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        _LOGGER.info("Received update from coordinator")
+        _LOGGER.debug("Received update from coordinator")
 
         new_is_on = self._get_fan_state_from_api_state()
         has_changed = False
@@ -90,5 +92,5 @@ class RoomFan(CoordinatorEntity, FanEntity):
 
         # Sync state to HomeAssistant
         if has_changed:
-            _LOGGER.info("Updating HA states for fan")
+            _LOGGER.debug("Updating HA states")
             self.async_write_ha_state()
