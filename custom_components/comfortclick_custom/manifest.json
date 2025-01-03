@@ -1,7 +1,7 @@
 {
   "domain": "comfortclick_custom",
   "name": "ConfortClick Custom Integration",
-  "codeowners": [],
+  "codeowners": ["@peeter-tomberg"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/peeter-tomberg/comfortclick_custom",
