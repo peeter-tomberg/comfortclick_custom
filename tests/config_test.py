@@ -1,19 +1,27 @@
 """Test config loading."""
+
 import logging
 
 import pytest
 
 from custom_components.comfortclick_custom.entities.ac.room_fan import RoomFanConfig
-from custom_components.comfortclick_custom.entities.ac.room_thermostat import RoomThermostatConfig
-from custom_components.comfortclick_custom.entities.locks.building_lock import BuildingLockConfig
+from custom_components.comfortclick_custom.entities.ac.room_thermostat import (
+    RoomThermostatConfig,
+)
+from custom_components.comfortclick_custom.entities.locks.building_lock import (
+    BuildingLockConfig,
+)
 from custom_components.comfortclick_custom.util.load_fans_config import load_fans_config
 from custom_components.comfortclick_custom.util.load_lock_config import load_lock_config
-from custom_components.comfortclick_custom.util.load_thermostats_config import load_thermostats_config
+from custom_components.comfortclick_custom.util.load_thermostats_config import (
+    load_thermostats_config,
+)
 from custom_components.comfortclick_custom.util.load_vent_config import load_vent_config
 from custom_components.comfortclick_custom.util.read_yaml import read_yaml
 
 logging.basicConfig(level=logging.INFO)
 _LOGGER = logging.getLogger(__name__)
+
 
 @pytest.mark.asyncio
 async def test_config_loader():
@@ -24,6 +32,7 @@ async def test_config_loader():
     assert config.get("utilities") is not None
     assert config.get("vent") is not None
 
+
 @pytest.mark.asyncio
 async def test_fans_config_loader():
     configs = await load_fans_config()
@@ -31,6 +40,7 @@ async def test_fans_config_loader():
     assert isinstance(configs[1], RoomFanConfig)
     assert configs[0].name == "Bedroom fan"
     assert configs[1].name == "Living room fan"
+
 
 @pytest.mark.asyncio
 async def test_vent_config_loader():
@@ -45,6 +55,7 @@ async def test_vent_config_loader():
 
     assert config.vent_winter_mode == ""
 
+
 @pytest.mark.asyncio
 async def test_locks_config_loader():
     configs = await load_lock_config()
@@ -52,6 +63,7 @@ async def test_locks_config_loader():
     assert isinstance(configs[1], BuildingLockConfig)
     assert configs[0].door_name == "Main door"
     assert configs[1].door_name == "Cellar door"
+
 
 @pytest.mark.asyncio
 async def test_thermostats_config_loader():
