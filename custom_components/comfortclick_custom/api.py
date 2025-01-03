@@ -1,22 +1,30 @@
+"""API object class."""
+
+import json
 import logging
+import time
+import typing
+from http import HTTPStatus
 
 import aiohttp
-import typing
-import time
-import json
 
 _LOGGER = logging.getLogger(__name__)
 
+
 # Since keys contain \\ and python handles strings differently
-def sanitise_device_name(device_name: str):
+def _sanitise_device_name(device_name: str) -> str:
     return device_name.replace("\\\\", "\\")
 
-def compare_device_names(a: str, b: str) -> bool:
-    return sanitise_device_name(a) == sanitise_device_name(b)
+
+def _compare_device_names(a: str, b: str) -> bool:
+    return _sanitise_device_name(a) == _sanitise_device_name(b)
 
 
 class ApiInstance:
+    """Class that handles communicating with ComfortClick API."""
+
     def __init__(self, username: str, password: str, host: str) -> None:
+        """Wire up the Api Instance class with props from constructor."""
         self._username = username
         self._password = password
         self._host = host
@@ -24,48 +32,85 @@ class ApiInstance:
         self._state = []
         self._authorized_headers = None
 
-    # Used for updating the internal state of a component
-    def _set_state_value(self, device_name: str, value: typing.Any):
-        _LOGGER.info(msg=f"Changing internal state {device_name} - {value}")
+    def _set_state_value(self, device_name: str, value: typing.Any) -> None:
+        """Update the internal state of a component."""
+        _LOGGER.debug(
+            msg="Changing component internal state",
+            extra={
+                "device_name": device_name,
+                "value": value,
+            },
+        )
         for item in self._state:
-            if compare_device_names(item.get("DeviceName"), device_name):
+            if _compare_device_names(item.get("DeviceName"), device_name):
                 item["Value"] = value
 
-    # Used for communicating with ComfortClick API
-    async def set_value(self, device_name: str, value: typing.Any):
+    async def set_value(self, device_name: str, value: typing.Any) -> None:
+        """Communicate with ComfortClick API."""
         payload = {
-            "objectName": sanitise_device_name(device_name),
+            "objectName": _sanitise_device_name(device_name),
             "valueName": "Value",
-            "value": value
+            "value": value,
         }
         url = f"{self._host}/SetValue"
-        _LOGGER.info(msg=f"Changing api state {device_name} - {value} - {json.dumps(payload, separators=(',', ':'))}")
-        async with aiohttp.ClientSession(headers=self._authorized_headers) as session:
-            async with session.post(url, json=payload, ssl=False) as response:
-                if response.status != 200:
-                    raise Exception(f"Failed to set value: {response.status} {await response.text()}")
-                result = await response.json()
-                _LOGGER.info(msg=f"Changed api state {device_name} - {value} - {json.dumps(result, separators=(',', ':'))}")
-                return result
+        _LOGGER.debug(
+            msg="Calling /SetValue in ComfortClick API",
+            extra={
+                "device_name": device_name,
+                "value": value,
+                "payload": json.dumps(payload, separators=(",", ":")),
+            },
+        )
+        async with (
+            aiohttp.ClientSession(headers=self._authorized_headers) as session,
+            session.post(url, json=payload, ssl=False) as response,
+        ):
+            if response.status != HTTPStatus.OK:
+                raise HttpStatusNotOkError(
+                    {
+                        "message": "Failed to set value",
+                        "status": response.status,
+                        "text": await response.text(),
+                    }
+                )
+            result = await response.json()
+            _LOGGER.debug(
+                msg="Received /SetValue response from ComfortClick API",
+                extra={
+                    "device_name": device_name,
+                    "value": value,
+                    "payload": json.dumps(payload, separators=(",", ":")),
+                },
+            )
+            return result
 
-
-# Reads value from internal state
-    def get_value(self, device_name: str):
+    def get_value(self, device_name: str) -> typing.Any:
+        """Get value for device from internal state."""
         value = None
         for item in self._state:
-            if compare_device_names(item.get("DeviceName"), device_name):
+            if _compare_device_names(item.get("DeviceName"), device_name):
                 value = item.get("Value")
 
-        _LOGGER.info(msg=f"Getting value from internal state - {device_name} - {value}")
+        _LOGGER.debug(
+            msg="Getting component internal state value.",
+            extra={
+                "device_name": device_name,
+                "value": value,
+            },
+        )
         if value is None:
-            _LOGGER.info("------------------------ NOT FOUND ----------------------------")
-            for item in self._state:
-                _LOGGER.info(fr"{item.get("DeviceName")} - {item.get("Value")}")
-            _LOGGER.info("------------------------ NOT FOUND ----------------------------")
+            _LOGGER.warning(
+                msg="Failed to find internal state value.",
+                extra={
+                    "device_name": device_name,
+                    "value": value,
+                    "payload": json.dumps(self._state, separators=(",", ":")),
+                },
+            )
         return value
 
-    # Login to ComfortClick API, fetch initial state
-    async def connect(self):
+    async def connect(self) -> bool:
+        """Login to ComfortClick API."""
         body = {
             "UserName": self._username,
             "Password": self._password,
@@ -84,60 +129,111 @@ class ApiInstance:
         login_url = f"{self._host}/Login"
         _LOGGER.info(msg="Connecting to API")
 
-        async with aiohttp.ClientSession(headers=default_headers) as session:
-            async with session.post(login_url, json=body, ssl=False) as response:
-                if response.status != 200:
-                    raise Exception(f"Failed to login: {response.status} {await response.text()}")
+        async with (
+            aiohttp.ClientSession(headers=default_headers) as session,
+            session.post(login_url, json=body, ssl=False) as response,
+        ):
+            if response.status != HTTPStatus.OK:
+                raise HttpStatusNotOkError(
+                    {
+                        "message": "Failed to login",
+                        "status": response.status,
+                        "text": await response.text(),
+                    }
+                )
 
-                login_response = await response.json()
-                if login_response.get("Status") != "OK":
-                    raise Exception(f"Login error: {login_response.get('Status')}")
+            login_response = await response.json()
+            if login_response.get("Status") != "OK":
+                raise AuthorizationError(
+                    {
+                        "message": "Login status not ok",
+                        "status": login_response.get("Status"),
+                    }
+                )
 
-                token_header = response.headers.get("Set-Cookie")
-                if not token_header:
-                    raise Exception("Failed to get token from cookie")
+            token_header = response.headers.get("Set-Cookie")
+            if not token_header:
+                raise AuthorizationError({"message": "Failed to get token from cookie"})
 
-                token = token_header.replace("Token=", "").split(";")[0]
-                self._authorized_headers = {
-                    **default_headers,
-                    "Cookie": f"Token={token}; CurrentPath=",
-                }
-                _LOGGER.info(msg="Connected to API")
+            token = token_header.replace("Token=", "").split(";")[0]
+            self._authorized_headers = {
+                **default_headers,
+                "Cookie": f"Token={token}; CurrentPath=",
+            }
+            _LOGGER.info(msg="Connected to API")
         return True
 
-    # Fetches the initial state of the integration
-    async def initialize_state(self):
+    async def initialize_state(self) -> None:
+        """Fetch initial state from ComfortClick."""
         url = f"{self._host}/GetPanel"
         body = {"Path": ""}
         _LOGGER.info(msg="Getting initial state")
 
-        async with aiohttp.ClientSession(headers=self._authorized_headers) as session:
-            async with session.post(url, json=body, ssl=False) as response:
-                if response.status != 200:
-                    raise Exception(f"Failed to initialize state: {response.status} {await response.text()}")
-                data = await response.json()
-                self._state = data.get("ThemeObject", {}).get("ValueUpdates", [])
-                _LOGGER.info(f"Loaded initial state {json.dumps(self._state)}")
+        async with (
+            aiohttp.ClientSession(headers=self._authorized_headers) as session,
+            session.post(url, json=body, ssl=False) as response,
+        ):
+            if response.status != HTTPStatus.OK:
+                raise HttpStatusNotOkError(
+                    {
+                        "message": "Failed to get initial state",
+                        "status": response.status,
+                        "text": await response.text(),
+                    }
+                )
 
-    # Poll function to listen to updates
-    async def poll(self):
+            data = await response.json()
+            self._state = data.get("ThemeObject", {}).get("ValueUpdates", [])
+            _LOGGER.debug(
+                msg="Loaded initial state from ComfortClick API.",
+                extra={
+                    "payload": json.dumps(self._state, separators=(",", ":")),
+                },
+            )
+
+    async def poll(self) -> None:
+        """Poll data from ComfortClick."""
         url = f"{self._host}/GetClientData?_={int(time.time())}"
-        async with aiohttp.ClientSession(headers=self._authorized_headers) as session:
-            async with session.post(url, ssl=False) as response:
-                if response.status != 200:
-                    raise Exception(f"Polling failed: {response.status} {await response.text()}")
+        async with (
+            aiohttp.ClientSession(headers=self._authorized_headers) as session,
+            session.post(url, ssl=False) as response,
+        ):
+            if response.status != HTTPStatus.OK:
+                raise HttpStatusNotOkError(
+                    {
+                        "message": "Failed to poll",
+                        "status": response.status,
+                        "text": await response.text(),
+                    }
+                )
 
-                response_data = await response.json()
-                for item in response_data.get('PropertyUpdates', []):
-                    if item.get('PropertyName') == "Value":
-                        self._set_state_value(item.get('DeviceName'), item.get('Value'))
+            response_data = await response.json()
+            for item in response_data.get("PropertyUpdates", []):
+                if item.get("PropertyName") == "Value":
+                    self._set_state_value(item.get("DeviceName"), item.get("Value"))
 
-    # Logs you out
-    async def disconnect(self):
+    async def disconnect(self) -> None:
+        """Log out from ComfortClick API."""
         url = f"{self._host}/Logout"
         _LOGGER.info(msg="Disconnecting from API")
 
-        async with aiohttp.ClientSession(headers=self._authorized_headers) as session:
-            async with session.get(url, ssl=False) as response:
-                if response.status != 200:
-                    raise Exception(f"Failed to logout: {response.status} {await response.text()}")
+        async with (
+            aiohttp.ClientSession(headers=self._authorized_headers) as session,
+            session.get(url, ssl=False) as response,
+        ):
+            if response.status != HTTPStatus.OK:
+                raise HttpStatusNotOkError(
+                    {
+                        "message": "Failed to log out",
+                        "status": response.status,
+                        "text": await response.text(),
+                    }
+                )
+
+
+class HttpStatusNotOkError(Exception):
+    """Raised when http request status is not 200."""
+
+
+class AuthorizationError(Exception):
+    """Raised when authorization fails."""

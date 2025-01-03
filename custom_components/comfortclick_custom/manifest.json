@@ -1,19 +1,11 @@
 {
   "domain": "comfortclick_custom",
   "name": "ConfortClick Custom Integration",
-  "codeowners": [],
+  "codeowners": ["@peeter-tomberg"],
   "config_flow": true,
-  "dependencies": [],
-  "documentation": "",
-  "homekit": {
-    "supported_features": [
-      "climate",
-      "lock"
-    ]
-  },
-  "iot_class": "local_push",
-  "requirements": [],
-  "ssdp": [],
-  "version": "0.1.0",
-  "zeroconf": []
+  "documentation": "https://github.com/peeter-tomberg/comfortclick_custom",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/peeter-tomberg/comfortclick_custom/issues",
+  "version": "1.0.0"
 }

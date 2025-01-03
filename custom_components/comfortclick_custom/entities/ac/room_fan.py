@@ -1,8 +1,10 @@
+"""Exposes fans to home assistant."""
+
 import logging
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any
 
-from homeassistant.components.fan import FanEntityFeature, FanEntity
+from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -13,20 +15,26 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class RoomFanConfig:
-    """Class for keeping track of an item in inventory."""
+    """Class for keeping room fan configuration options."""
+
     name: str
     heating_id: str
     lock_id: str
     fan_id: str
 
+
 class RoomFan(CoordinatorEntity, FanEntity):
+    """Enables home assistant to control the room fan."""
+
     # Entity
     _attr_should_poll = False
     # FanEntity
-    _attr_supported_features = (FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF)
+    _attr_supported_features = FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
     _attr_is_on = None
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: RoomFanConfig):
+    def __init__(
+        self, coordinator: ComfortClickCoordinator, config: RoomFanConfig
+    ) -> None:
         """Initialize the Fan."""
         # coordinator that manages state
         self._coordinator = coordinator
@@ -40,37 +48,40 @@ class RoomFan(CoordinatorEntity, FanEntity):
         # start listener on coordinator
         super().__init__(coordinator)
 
-        _LOGGER.info("Finished setting up fan")
+        _LOGGER.debug("Finished setting up")
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the entity is on."""
         return self._attr_is_on
 
-    def get_fan_state_from_api_state(self):
+    def _get_fan_state_from_api_state(self) -> bool:
         # Fan will not turn on if heating is on
         if self._coordinator.api.get_value(self._config.heating_id):
             return False
         # Fans use a lock mechanism, so off means lock is off meaning device is on
-        if not self._coordinator.api.get_value(self._config.lock_id):
-            return True
-        return False
+        return not self._coordinator.api.get_value(self._config.lock_id)
 
-    async def async_turn_on(self, speed: Optional[str] = None, percentage: Optional[int] = None,
-                            preset_mode: Optional[str] = None, **kwargs: Any) -> None:
+    async def async_turn_on(
+        self,
+        _speed: str | None = None,
+        _percentage: int | None = None,
+        _preset_mode: str | None = None,
+        **_kwargs: Any,
+    ) -> None:
         """Turn on the fan."""
-        await self._coordinator.api.set_value(self._config.lock_id, False)
+        await self._coordinator.api.set_value(self._config.lock_id, value=False)
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **_kwargs: Any) -> None:
         """Turn the fan off."""
-        await self._coordinator.api.set_value(self._config.lock_id, True)
+        await self._coordinator.api.set_value(self._config.lock_id, value=True)
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        _LOGGER.info("Received update from coordinator")
+        _LOGGER.debug("Received update from coordinator")
 
-        new_is_on = self.get_fan_state_from_api_state()
+        new_is_on = self._get_fan_state_from_api_state()
         has_changed = False
 
         # Did we actually get a change?
@@ -81,5 +92,5 @@ class RoomFan(CoordinatorEntity, FanEntity):
 
         # Sync state to HomeAssistant
         if has_changed:
-            _LOGGER.info("Updating HA states for fan")
+            _LOGGER.debug("Updating HA states")
             self.async_write_ha_state()

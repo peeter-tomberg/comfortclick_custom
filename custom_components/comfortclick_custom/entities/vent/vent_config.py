@@ -1,9 +1,11 @@
+"""Sharable configuration file for all classes in this directory."""
+
 from dataclasses import dataclass
 
 
 @dataclass
 class VentConfig:
-    """Class for keeping track of an item in inventory."""
+    """Class for keeping all configuration options."""
 
     vent_winter_mode: str
     away_mode: str

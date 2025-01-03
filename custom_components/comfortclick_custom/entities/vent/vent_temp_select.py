@@ -1,3 +1,5 @@
+"""Exposes vent temperature control to home assistant."""
+
 import logging
 from enum import StrEnum
 
@@ -5,22 +7,30 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .vent_config import VentConfig
 from ... import ComfortClickCoordinator
+from .vent_config import VentConfig
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class VentTempModes(StrEnum):
+    """Available vent temperature modes in comfort click."""
+
     WARM_AIR = "Warm air"
     COLD_AIR = "Cold air"
 
+
 class VentTempSelect(CoordinatorEntity, SelectEntity):
-    """Representation of a door with a lock entity."""
+    """Enables home assistant to choose between temp modes."""
 
     current_option = None | VentTempModes
-    options = [VentTempModes.WARM_AIR, VentTempModes.COLD_AIR]
+    options: list[VentTempModes] = frozenset(
+        [VentTempModes.WARM_AIR, VentTempModes.COLD_AIR]
+    )
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: VentConfig):
+    def __init__(
+        self, coordinator: ComfortClickCoordinator, config: VentConfig
+    ) -> None:
         """Initialize the door sensor."""
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-temp-select"
@@ -33,33 +43,41 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
         # start listener on coordinator
         super().__init__(coordinator)
 
-    def update_mode(self, is_winter_mode_on: bool):
-        if is_winter_mode_on and self.current_option != VentTempModes.WARM_AIR:
-            _LOGGER.warning("Setting mode to warm air from update_mode")
+    def _turn_on_winter_mode(self) -> None:
+        if self.current_option != VentTempModes.WARM_AIR:
+            _LOGGER.debug("Setting mode to warm air")
             self.current_option = VentTempModes.WARM_AIR
             self.async_write_ha_state()
-        if not is_winter_mode_on and self.current_option != VentTempModes.COLD_AIR:
-            _LOGGER.warning("Setting mode to cold air from update_mode")
+
+    def _turn_off_winter_mode(self) -> None:
+        if self.current_option != VentTempModes.COLD_AIR:
+            _LOGGER.debug("Setting mode to cold air")
             self.current_option = VentTempModes.COLD_AIR
             self.async_write_ha_state()
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        _LOGGER.warning(f"Changing option to {option}")
+        _LOGGER.debug(msg="Changing option", extra={"option": option})
         # If we want warm air pushing in, we should turn winter mode on
         if option == VentTempModes.WARM_AIR:
-            self.update_mode(True)
-            await self._coordinator.api.set_value(self._config.vent_winter_mode, True)
+            self._turn_on_winter_mode()
+            await self._coordinator.api.set_value(
+                self._config.vent_winter_mode, value=True
+            )
         if option == VentTempModes.COLD_AIR:
-            self.update_mode(False)
-            await self._coordinator.api.set_value(self._config.vent_winter_mode, False)
+            self._turn_off_winter_mode()
+            await self._coordinator.api.set_value(
+                self._config.vent_winter_mode, value=False
+            )
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
         # If winter mode is on, that means warm air is being pushed in
-        is_winter_mode_on = self._coordinator.api.get_value(self._config.vent_winter_mode)
-        self.update_mode(is_winter_mode_on)
-
-
-
+        is_winter_mode_on = self._coordinator.api.get_value(
+            self._config.vent_winter_mode
+        )
+        if is_winter_mode_on:
+            self._turn_on_winter_mode()
+        else:
+            self._turn_off_winter_mode()

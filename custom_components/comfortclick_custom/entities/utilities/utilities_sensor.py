@@ -1,8 +1,15 @@
+"""Exposes utilities sensors to home assistant."""
+
 import logging
 from dataclasses import dataclass
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass, SensorDeviceClass, SensorEntityDescription
-from homeassistant.const import UnitOfVolume, UnitOfEnergy
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
+from homeassistant.const import UnitOfEnergy, UnitOfVolume
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -31,20 +38,24 @@ HeatingSensor = SensorEntityDescription(
     state_class=SensorStateClass.TOTAL_INCREASING,
 )
 
+
 @dataclass
 class UtilitiesSensorConfig:
-    """Class for keeping track of an item in inventory."""
+    """Class for keeping all configuration options."""
 
     id: str = None
     name: str = None
     description: SensorEntityDescription = None
 
+
 class UtilitiesSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a door with a lock entity."""
+    """Representation of a sensor that reports utilities."""
 
     value = None
 
-    def __init__(self, coordinator: ComfortClickCoordinator, config: UtilitiesSensorConfig):
+    def __init__(
+        self, coordinator: ComfortClickCoordinator, config: UtilitiesSensorConfig
+    ) -> None:
         """Initialize the door sensor."""
         # coordinator that manages state
         self._coordinator = coordinator
@@ -59,10 +70,9 @@ class UtilitiesSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
 
     @property
-    def native_value(self):
+    def native_value(self) -> bool:
         """Return the state of the sensor."""
         return self._coordinator.api.get_value(self._attr_unique_id)
-
 
     @callback
     def _handle_coordinator_update(self) -> None:
