@@ -51,8 +51,6 @@ class UtilitiesSensorConfig:
 class UtilitiesSensor(CoordinatorEntity, SensorEntity):
     """Representation of a sensor that reports utilities."""
 
-    value = None
-
     def __init__(
         self, coordinator: ComfortClickCoordinator, config: UtilitiesSensorConfig
     ) -> None:
@@ -69,15 +67,10 @@ class UtilitiesSensor(CoordinatorEntity, SensorEntity):
         # start listener on coordinator
         super().__init__(coordinator)
 
-    @property
-    def native_value(self) -> bool:
-        """Return the state of the sensor."""
-        return self._coordinator.api.get_value(self._attr_unique_id)
-
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
         updated_value = self._coordinator.api.get_value(self._attr_unique_id)
-        if updated_value != self.value:
-            self.value = updated_value
+        if updated_value != self._attr_native_value:
+            self._attr_native_value = updated_value
             self.async_write_ha_state()

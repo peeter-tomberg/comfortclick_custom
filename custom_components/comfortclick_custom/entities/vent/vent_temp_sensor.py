@@ -27,14 +27,14 @@ class VentPresetModes(StrEnum):
 class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
     """Representation of a sensor that reports the vent temperature."""
 
-    value = None
-    _mode = VentPresetModes
+    _mode: VentPresetModes | None
 
     def __init__(
         self, coordinator: ComfortClickCoordinator, config: VentConfig
     ) -> None:
         """Initialize the door sensor."""
         # re-using sensor id as unique id for this device
+        self._mode = None
         self._attr_unique_id = "comfortclick-apartment-vent-temperature-sensor"
         self.entity_description = SensorEntityDescription(
             key="vent_temperature_sensor",
@@ -54,7 +54,7 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> int:
         """Return the state of the sensor."""
-        return self.value
+        return self._attr_native_value
 
     def _check_home_mode(self) -> bool:
         is_home_mode_on = self._coordinator.api.get_value(self._config.home_mode)
@@ -62,10 +62,11 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
             self._config.home_vent_air_temp
         )
         if is_home_mode_on and (
-            self._mode != VentPresetModes.HOME or self.value != home_vent_temperature
+            self._mode != VentPresetModes.HOME
+            or self._attr_native_value != home_vent_temperature
         ):
             self._mode = VentPresetModes.HOME
-            self.value = home_vent_temperature
+            self._attr_native_value = home_vent_temperature
             self.async_write_ha_state()
             return True
         return False
@@ -76,10 +77,11 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
             self._config.away_vent_air_temp
         )
         if is_away_mode_on and (
-            self._mode != VentPresetModes.AWAY or self.value != away_vent_temperature
+            self._mode != VentPresetModes.AWAY
+            or self._attr_native_value != away_vent_temperature
         ):
             self._mode = VentPresetModes.AWAY
-            self.value = away_vent_temperature
+            self._attr_native_value = away_vent_temperature
             self.async_write_ha_state()
             return True
         return False
@@ -90,10 +92,11 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
             self._config.guest_vent_air_temp
         )
         if is_guest_mode_on and (
-            self._mode != VentPresetModes.GUESTS or self.value != guest_vent_temperature
+            self._mode != VentPresetModes.GUESTS
+            or self._attr_native_value != guest_vent_temperature
         ):
             self._mode = VentPresetModes.GUESTS
-            self.value = guest_vent_temperature
+            self._attr_native_value = guest_vent_temperature
             self.async_write_ha_state()
             return True
         return False
