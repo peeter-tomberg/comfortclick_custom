@@ -3,9 +3,6 @@
   "name": "ConfortClick Custom Integration",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": {
-
-  },
   "documentation": "https://github.com/peeter-tomberg/comfortclick_custom",
   "homekit": {},
   "integration_type": "hub",
