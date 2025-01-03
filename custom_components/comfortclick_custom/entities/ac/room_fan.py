@@ -12,6 +12,7 @@ from ... import ComfortClickCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# 5 is considered off, anything above 5 is on
 FAN_ON_THRESHOLD = 5
 FAN_TEMP_DIFF_THRESHOLD = 0.25
 
@@ -65,21 +66,19 @@ class RoomFan(CoordinatorEntity, FanEntity):
 
     def _get_fan_state_from_api_state(self) -> bool:
         # If lock is on, fan cant be on
-        if not self._coordinator.api.get_value(self._config.lock_id):
+        if self._coordinator.api.get_value(self._config.lock_id):
             return False
         # If heating is on, fan cant be on
         if self._coordinator.api.get_value(self._config.heating_id):
             return False
-
         # If heating is off, meaning current temp is same or lower than target temp
         # Now we are trying to optimistically assume fan state based on temp
         current_temp = self._get_current_temperature_from_api_state()
         target_temp = self._get_target_temperature_from_api_state()
+        temp_diff = current_temp - target_temp
 
-        if current_temp - target_temp < FAN_TEMP_DIFF_THRESHOLD:
+        if temp_diff < FAN_TEMP_DIFF_THRESHOLD:
             return False
-
-        # Fall back to rely on comfort click logic
 
         return self._coordinator.api.get_value(self._config.fan_id) > FAN_ON_THRESHOLD
 
@@ -107,10 +106,14 @@ class RoomFan(CoordinatorEntity, FanEntity):
         **_kwargs: Any,
     ) -> None:
         """Turn on the fan."""
+        self._attr_is_on = True
+        self.async_write_ha_state()
         await self._coordinator.api.set_value(self._config.lock_id, value=False)
 
     async def async_turn_off(self, **_kwargs: Any) -> None:
         """Turn the fan off."""
+        self._attr_is_on = False
+        self.async_write_ha_state()
         await self._coordinator.api.set_value(self._config.lock_id, value=True)
 
     @callback
