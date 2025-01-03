@@ -17,6 +17,8 @@ async def load_fans_config() -> list[RoomFanConfig]:
             lock_id=item.get("lock_id", None),
             fan_id=item.get("fan_id", None),
             heating_id=item.get("heating_id", None),
+            current_temperature_id=item.get("current_temperature_id", None),
+            target_temperature_id=item.get("target_temperature_id", None),
         )
         for item in data.get("fans", [])
     ]

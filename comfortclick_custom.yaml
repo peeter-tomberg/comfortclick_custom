@@ -3,10 +3,14 @@ fans:
     lock_id: ""
     fan_id: ""
     heating_id: ""
+    current_temperature_id: ""
+    target_temperature_id: ""
   - name: "Living room fan"
     lock_id: ""
     fan_id: ""
     heating_id: ""
+    current_temperature_id: ""
+    target_temperature_id: ""
 
 locks:
   - door_name: "Main door"
