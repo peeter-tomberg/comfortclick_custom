@@ -121,16 +121,5 @@ class RoomFan(CoordinatorEntity, FanEntity):
         """Fetch new state data for the sensor."""
         _LOGGER.debug("Received update from coordinator")
 
-        new_is_on = self._get_fan_state_from_api_state()
-        has_changed = False
-
-        # Did we actually get a change?
-        if new_is_on != self._attr_is_on:
-            has_changed = True
-
-        self._attr_is_on = new_is_on
-
-        # Sync state to HomeAssistant
-        if has_changed:
-            _LOGGER.debug("Updating HA states")
-            self.async_write_ha_state()
+        self._attr_is_on = self._get_fan_state_from_api_state()
+        super()._handle_coordinator_update()

@@ -81,7 +81,5 @@ class BuildingLock(CoordinatorEntity, LockEntity):
         """Fetch new state data for the sensor."""
         updated_state_is_open = self._get_is_open_from_api_state()
         if updated_state_is_open != self.is_open:
-            if updated_state_is_open:
-                self._mark_door_as_open()
-            else:
-                self._mark_door_as_locked()
+            self._attr_is_open = bool(updated_state_is_open)
+        super()._handle_coordinator_update()

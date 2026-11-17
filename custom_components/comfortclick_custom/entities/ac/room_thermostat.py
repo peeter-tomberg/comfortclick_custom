@@ -114,21 +114,7 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         new_current_temperature = self._get_current_temperature_from_api_state()
         new_target_temperature = self._get_target_temperature_from_api_state()
         new_hvac_action = self._get_hvac_action_from_api_state()
-        has_changed = False
-
-        # Did we actually get a change?
-        if (
-            new_current_temperature != self._attr_current_temperature
-            or new_target_temperature != self._attr_target_temperature
-            or new_hvac_action != self._attr_hvac_action
-        ):
-            has_changed = True
-
         self._attr_current_temperature = new_current_temperature
         self._attr_target_temperature = new_target_temperature
         self._attr_hvac_action = new_hvac_action
-
-        # Sync state to HomeAssistant
-        if has_changed:
-            _LOGGER.debug("Updating HA states")
-            self.async_write_ha_state()
+        super()._handle_coordinator_update()

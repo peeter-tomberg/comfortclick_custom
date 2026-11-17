@@ -75,7 +75,7 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
         is_winter_mode_on = self._coordinator.api.get_value(
             self._config.vent_winter_mode
         )
-        if is_winter_mode_on:
-            self._turn_on_winter_mode()
-        else:
-            self._turn_off_winter_mode()
+        self._attr_current_option = (
+            VentTempModes.WARM_AIR if is_winter_mode_on else VentTempModes.COLD_AIR
+        )
+        super()._handle_coordinator_update()
