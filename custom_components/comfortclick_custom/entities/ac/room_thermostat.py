@@ -14,6 +14,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ... import ComfortClickCoordinator
+from .values import numeric_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +60,9 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         # coordinator that manages state
         self._coordinator = coordinator
         self._config = config
+        self._attr_current_temperature = self._get_current_temperature_from_api_state()
+        self._attr_target_temperature = self._get_target_temperature_from_api_state()
+        self._attr_hvac_action = self._get_hvac_action_from_api_state()
         # human-readable name
         self._attr_name = config.name
         # re-using heating id as unique id for this device
@@ -71,31 +75,47 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
 
         _LOGGER.debug("Finished setting up")
 
-    def _get_hvac_action_from_api_state(self) -> HVACAction:
-        if self._coordinator.api.get_value(self._config.heating_id):
+    @property
+    def available(self) -> bool:
+        """Return whether coordinator and required climate readings are available."""
+        return (
+            super().available
+            and self._attr_current_temperature is not None
+            and self._attr_target_temperature is not None
+            and self._attr_hvac_action is not None
+        )
+
+    def _get_hvac_action_from_api_state(self) -> HVACAction | None:
+        heating = self._coordinator.api.get_value(self._config.heating_id)
+        if not isinstance(heating, bool):
+            return None
+        if heating:
             return HVACAction.HEATING
         # If we have no fan, we cant cool
         if self._config.fan_id is None:
             return HVACAction.IDLE
-        if self._coordinator.api.get_value(self._config.fan_id) > FAN_ON_THRESHOLD:
+        fan = numeric_value(self._coordinator.api.get_value(self._config.fan_id))
+        if fan is None:
+            return None
+        if fan > FAN_ON_THRESHOLD:
             return HVACAction.COOLING
         return HVACAction.IDLE
 
-    def _get_current_temperature_from_api_state(self) -> float:
-        current_temperature = self._coordinator.api.get_value(
-            self._config.current_temperature_id
+    def _get_current_temperature_from_api_state(self) -> float | None:
+        current_temperature = numeric_value(
+            self._coordinator.api.get_value(self._config.current_temperature_id)
         )
         if current_temperature is None:
-            return 0
-        return round(float(current_temperature), 1)
+            return None
+        return round(current_temperature, 1)
 
-    def _get_target_temperature_from_api_state(self) -> float:
-        target_temperature = self._coordinator.api.get_value(
-            self._config.target_temperature_id
+    def _get_target_temperature_from_api_state(self) -> float | None:
+        target_temperature = numeric_value(
+            self._coordinator.api.get_value(self._config.target_temperature_id)
         )
         if target_temperature is None:
-            return 0
-        return round(float(target_temperature), 1)
+            return None
+        return round(target_temperature, 1)
 
     # Set target temperature
     async def async_set_temperature(self, **kwargs: int) -> None:
