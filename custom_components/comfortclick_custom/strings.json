@@ -1,0 +1,34 @@
+{
+  "title": "ComfortClick",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to ComfortClick",
+        "description": "Certificate verification is recommended. Disable it only for a trusted local controller using a self-signed certificate.",
+        "data": {
+          "host": "Controller URL",
+          "username": "Username",
+          "password": "Password",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the controller.",
+      "invalid_auth": "The controller rejected the credentials.",
+      "ssl_error": "The certificate could not be verified. Use a trusted certificate matching the controller URL, or disable verification only for a trusted local controller.",
+      "unknown": "An unexpected error occurred. Check the Home Assistant log."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ComfortClick connection",
+        "description": "Keep verification enabled where possible. Disabling it allows interception of credentials and commands. Use the exception only for a trusted local controller with a self-signed certificate. Saving reloads the integration.",
+        "data": {
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    }
+  }
+}

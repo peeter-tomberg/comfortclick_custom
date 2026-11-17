@@ -17,7 +17,13 @@ class ComfortClickCoordinator(DataUpdateCoordinator):
     """Coordinator object that has subscribers who ask it for latest data."""
 
     def __init__(
-        self, hass: HomeAssistant, host: str, username: str, password: str
+        self,
+        hass: HomeAssistant,
+        host: str,
+        username: str,
+        password: str,
+        *,
+        verify_ssl: bool = True,
     ) -> None:
         """Initialize coordinator."""
         _LOGGER.info("Initializing coordinator")
@@ -26,6 +32,7 @@ class ComfortClickCoordinator(DataUpdateCoordinator):
             username=username,
             password=password,
             session=async_get_clientsession(hass),
+            verify_ssl=verify_ssl,
         )
         super().__init__(
             hass,

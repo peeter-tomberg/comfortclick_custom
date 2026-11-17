@@ -105,6 +105,7 @@ async def test_failed_setup_stops_coordinator_and_clears_runtime(
     hass.config_entries.async_forward_entry_setups = AsyncMock()
     entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test-entry"
+    entry.options = {}
     entry.data = {
         CONF_HOST: "https://controller.test",
         CONF_USERNAME: "user",
