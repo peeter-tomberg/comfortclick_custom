@@ -20,10 +20,6 @@ def _sanitise_device_name(device_name: str) -> str:
     return device_name.replace("\\\\", "\\")
 
 
-def _compare_device_names(a: str, b: str) -> bool:
-    return _sanitise_device_name(a) == _sanitise_device_name(b)
-
-
 def _validate_result(data: typing.Any) -> typing.Any:
     """Reject explicit application errors while allowing legacy statusless replies."""
     if not isinstance(data, dict):
@@ -87,7 +83,7 @@ class ApiInstance:
         self._host = host
         self._session = session
 
-        self._state = []
+        self._state: dict[str, typing.Any] = {}
         self._authorized_headers = None
         self._session_generation = 0
         self._snapshot_generation = -1
@@ -96,7 +92,7 @@ class ApiInstance:
         self._reconnect_lock = asyncio.Lock()
 
     def _set_state_value(self, device_name: str, value: typing.Any) -> None:
-        """Update the internal state of a component."""
+        """Update or discover a component using the same normalized identity."""
         _LOGGER.debug(
             msg="Changing component internal state",
             extra={
@@ -104,9 +100,7 @@ class ApiInstance:
                 "value": value,
             },
         )
-        for item in self._state:
-            if _compare_device_names(item.get("DeviceName"), device_name):
-                item["Value"] = value
+        self._state[_sanitise_device_name(device_name)] = value
 
     async def _request_json(self, path: str, payload: typing.Any = None) -> typing.Any:
         """Make one authenticated request without retrying side effects."""
@@ -189,10 +183,7 @@ class ApiInstance:
 
     def get_value(self, device_name: str) -> typing.Any:
         """Get value for device from internal state."""
-        value = None
-        for item in self._state:
-            if _compare_device_names(item.get("DeviceName"), device_name):
-                value = item.get("Value")
+        value = self._state.get(_sanitise_device_name(device_name))
 
         _LOGGER.debug(
             msg="Getting component internal state value.",
@@ -277,7 +268,10 @@ class ApiInstance:
         data = await self._request_json("GetPanel", {"Path": ""})
         if not isinstance(data, dict) or not isinstance(data.get("ThemeObject"), dict):
             raise ApiResponseError({"message": "Snapshot has no theme object"})
-        self._state = _require_updates(data["ThemeObject"], "ValueUpdates")
+        self._state = {
+            _sanitise_device_name(item["DeviceName"]): item["Value"]
+            for item in _require_updates(data["ThemeObject"], "ValueUpdates")
+        }
         self._snapshot_generation = self._session_generation
         self._snapshot_pending = False
 
