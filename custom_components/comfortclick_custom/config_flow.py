@@ -12,6 +12,7 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_USERNAME,
 )
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ApiInstance
 from .const import DOMAIN
@@ -35,7 +36,7 @@ DATA_SCHEMA = vol.Schema(
 MIN_HOST_LENGTH = 3
 
 
-async def validate_input(_hass: HomeAssistant, data: dict) -> dict[str, Any]:
+async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     """
     Validate the user input allows us to connect.
 
@@ -44,7 +45,12 @@ async def validate_input(_hass: HomeAssistant, data: dict) -> dict[str, Any]:
     if len(data[CONF_HOST]) < MIN_HOST_LENGTH:
         raise InvalidHost
 
-    api = ApiInstance(data[CONF_USERNAME], data[CONF_PASSWORD], data[CONF_HOST])
+    api = ApiInstance(
+        data[CONF_USERNAME],
+        data[CONF_PASSWORD],
+        data[CONF_HOST],
+        session=async_get_clientsession(hass),
+    )
 
     result = await api.connect()
     if not result:

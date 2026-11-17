@@ -10,6 +10,8 @@ import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
 
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30, connect=10, sock_read=25)
+
 
 # Since keys contain \\ and python handles strings differently
 def _sanitise_device_name(device_name: str) -> str:
@@ -23,11 +25,19 @@ def _compare_device_names(a: str, b: str) -> bool:
 class ApiInstance:
     """Class that handles communicating with ComfortClick API."""
 
-    def __init__(self, username: str, password: str, host: str) -> None:
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        host: str,
+        *,
+        session: aiohttp.ClientSession,
+    ) -> None:
         """Wire up the Api Instance class with props from constructor."""
         self._username = username
         self._password = password
         self._host = host
+        self._session = session
 
         self._state = []
         self._authorized_headers = None
@@ -61,10 +71,13 @@ class ApiInstance:
                 "payload": json.dumps(payload, separators=(",", ":")),
             },
         )
-        async with (
-            aiohttp.ClientSession(headers=self._authorized_headers) as session,
-            session.post(url, json=payload, ssl=False) as response,
-        ):
+        async with self._session.post(
+            url,
+            json=payload,
+            headers=self._authorized_headers,
+            timeout=REQUEST_TIMEOUT,
+            ssl=False,
+        ) as response:
             if response.status != HTTPStatus.OK:
                 raise HttpStatusNotOkError(
                     {
@@ -129,10 +142,13 @@ class ApiInstance:
         login_url = f"{self._host}/Login"
         _LOGGER.info(msg="Connecting to API")
 
-        async with (
-            aiohttp.ClientSession(headers=default_headers) as session,
-            session.post(login_url, json=body, ssl=False) as response,
-        ):
+        async with self._session.post(
+            login_url,
+            json=body,
+            headers=default_headers,
+            timeout=REQUEST_TIMEOUT,
+            ssl=False,
+        ) as response:
             if response.status != HTTPStatus.OK:
                 raise HttpStatusNotOkError(
                     {
@@ -169,10 +185,13 @@ class ApiInstance:
         body = {"Path": ""}
         _LOGGER.info(msg="Getting initial state")
 
-        async with (
-            aiohttp.ClientSession(headers=self._authorized_headers) as session,
-            session.post(url, json=body, ssl=False) as response,
-        ):
+        async with self._session.post(
+            url,
+            json=body,
+            headers=self._authorized_headers,
+            timeout=REQUEST_TIMEOUT,
+            ssl=False,
+        ) as response:
             if response.status != HTTPStatus.OK:
                 raise HttpStatusNotOkError(
                     {
@@ -194,10 +213,12 @@ class ApiInstance:
     async def poll(self) -> None:
         """Poll data from ComfortClick."""
         url = f"{self._host}/GetClientData?_={int(time.time())}"
-        async with (
-            aiohttp.ClientSession(headers=self._authorized_headers) as session,
-            session.post(url, ssl=False) as response,
-        ):
+        async with self._session.post(
+            url,
+            headers=self._authorized_headers,
+            timeout=REQUEST_TIMEOUT,
+            ssl=False,
+        ) as response:
             if response.status != HTTPStatus.OK:
                 raise HttpStatusNotOkError(
                     {
@@ -217,10 +238,12 @@ class ApiInstance:
         url = f"{self._host}/Logout"
         _LOGGER.info(msg="Disconnecting from API")
 
-        async with (
-            aiohttp.ClientSession(headers=self._authorized_headers) as session,
-            session.get(url, ssl=False) as response,
-        ):
+        async with self._session.get(
+            url,
+            headers=self._authorized_headers,
+            timeout=REQUEST_TIMEOUT,
+            ssl=False,
+        ) as response:
             if response.status != HTTPStatus.OK:
                 raise HttpStatusNotOkError(
                     {
