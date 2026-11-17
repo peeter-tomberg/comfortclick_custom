@@ -52,11 +52,13 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
         session=async_get_clientsession(hass),
     )
 
-    result = await api.connect()
-    if not result:
-        raise CannotConnect
-
-    return {"title": data[CONF_HOST]}
+    try:
+        result = await api.connect()
+        if not result:
+            raise CannotConnect
+        return {"title": data[CONF_HOST]}
+    finally:
+        await api.disconnect()
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

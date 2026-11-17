@@ -47,3 +47,8 @@ class ComfortClickCoordinator(DataUpdateCoordinator):
         """Update data every 1 second."""
         _LOGGER.debug("Polling API for latest state")
         await self.api.poll()
+
+    async def async_shutdown(self) -> None:
+        """Stop scheduled refreshes before releasing the server session."""
+        await super().async_shutdown()
+        await self.api.disconnect()
