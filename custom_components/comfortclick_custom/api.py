@@ -21,6 +21,11 @@ DOORBELL_SOUND = "DoorBell2.mp3"
 DOORBELL_HISTORY_SIZE = 128
 
 
+def create_api_session() -> aiohttp.ClientSession:
+    """Create an owned client that never reuses a controller TCP connection."""
+    return aiohttp.ClientSession(connector=aiohttp.TCPConnector(force_close=True))
+
+
 @dataclass(frozen=True, slots=True)
 class DoorbellRing:
     """A confirmed doorbell sound action received in a live poll."""
@@ -165,6 +170,7 @@ class ApiInstance:
             headers=self._authorized_headers,
             timeout=REQUEST_TIMEOUT,
             ssl=self._verify_ssl,
+            allow_redirects=False,
         ) as response:
             if response.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                 raise AuthorizationError({"status": response.status})
@@ -279,6 +285,7 @@ class ApiInstance:
         }
 
         default_headers = {
+            "connection": "close",
             "accept": "application/json, text/javascript, */*; q=0.01",
             "accept-language": "en-US,en;q=0.9,et;q=0.8,ru;q=0.7,zh-CN;q=0.6,zh;q=0.5",
             "content-type": "application/json; charset=UTF-8",
@@ -293,6 +300,7 @@ class ApiInstance:
             headers=default_headers,
             timeout=REQUEST_TIMEOUT,
             ssl=self._verify_ssl,
+            allow_redirects=False,
         ) as response:
             if response.status != HTTPStatus.OK:
                 raise HttpStatusNotOkError(
@@ -392,6 +400,7 @@ class ApiInstance:
                 headers=headers,
                 timeout=REQUEST_TIMEOUT,
                 ssl=self._verify_ssl,
+                allow_redirects=False,
             ) as response:
                 if response.status not in (
                     HTTPStatus.OK,

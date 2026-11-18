@@ -57,11 +57,10 @@ async def test_coordinator_default_and_explicit_verification_reach_api(
     session = MagicMock(spec=aiohttp.ClientSession)
     session.post.return_value = response({"Status": "OK"}, token="session")  # noqa: S106
     session.get.return_value = response()
-    monkeypatch.setattr(
-        coordinator_module, "async_get_clientsession", lambda _: session
-    )
+    monkeypatch.setattr(coordinator_module, "create_api_session", lambda: session)
     hass = MagicMock(spec=HomeAssistant)
     hass.loop = asyncio.get_running_loop()
+    hass.bus = MagicMock()
     coordinator = ComfortClickCoordinator(
         hass, "https://controller.test", "user", "password", **settings
     )
@@ -80,7 +79,7 @@ async def test_validation_without_saved_preference_leaves_verification_off(
     session = MagicMock(spec=aiohttp.ClientSession)
     session.post.return_value = response({"Status": "OK"}, token="session")  # noqa: S106
     session.get.return_value = response()
-    monkeypatch.setattr(config_flow, "async_get_clientsession", lambda _: session)
+    monkeypatch.setattr(config_flow, "create_api_session", lambda: session)
 
     await config_flow.validate_input(
         MagicMock(spec=HomeAssistant),
@@ -103,7 +102,7 @@ async def test_certificate_failure_has_actionable_form_error_and_no_fallback(
     session.post.side_effect = aiohttp.ClientConnectorCertificateError(
         MagicMock(), ssl.SSLCertVerificationError("self-signed certificate")
     )
-    monkeypatch.setattr(config_flow, "async_get_clientsession", lambda _: session)
+    monkeypatch.setattr(config_flow, "create_api_session", lambda: session)
     flow = config_flow.ConfigFlow()
     flow.hass = MagicMock(spec=HomeAssistant)
 

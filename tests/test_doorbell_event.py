@@ -66,9 +66,7 @@ def session() -> MagicMock:
 async def coordinator(
     hass: HomeAssistant, session: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> AsyncGenerator[ComfortClickCoordinator]:
-    monkeypatch.setattr(
-        coordinator_module, "async_get_clientsession", lambda _: session
-    )
+    monkeypatch.setattr(coordinator_module, "create_api_session", lambda: session)
     instance = ComfortClickCoordinator(
         hass, "http://controller.test", "username", "password"
     )
