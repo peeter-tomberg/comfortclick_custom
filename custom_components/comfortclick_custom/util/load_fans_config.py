@@ -1,11 +1,10 @@
-"""Utility helper to read fans yaml config file."""
+"""Load fan mappings from saved integration options."""
 
 import logging
 from collections.abc import Mapping
 from typing import Any
 
 from ..entities.ac.room_fan import RoomFanConfig
-from .read_yaml import read_yaml
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -13,8 +12,8 @@ _LOGGER = logging.getLogger(__name__)
 async def load_fans_config(
     options: Mapping[str, Any] | None = None,
 ) -> list[RoomFanConfig]:
-    """Read saved fan mappings, falling back to YAML when not configured."""
-    data = options if options is not None and "fans" in options else await read_yaml()
+    """Read saved fan mappings, using no entities for unconfigured sections."""
+    data = options if options is not None else {}
     return [
         RoomFanConfig(
             name=item.get("name", None),

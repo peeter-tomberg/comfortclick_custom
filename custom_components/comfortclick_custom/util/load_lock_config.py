@@ -1,11 +1,10 @@
-"""Utility helper to read locks yaml config file."""
+"""Load door lock mappings from saved integration options."""
 
 import logging
 from collections.abc import Mapping
 from typing import Any
 
 from ..entities.locks.building_lock import BuildingLockConfig
-from .read_yaml import read_yaml
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -13,8 +12,8 @@ _LOGGER = logging.getLogger(__name__)
 async def load_lock_config(
     options: Mapping[str, Any] | None = None,
 ) -> list[BuildingLockConfig]:
-    """Read saved door mappings, falling back to YAML when not configured."""
-    data = options if options is not None and "locks" in options else await read_yaml()
+    """Read saved door mappings, using no entities for unconfigured sections."""
+    data = options if options is not None else {}
     return [
         BuildingLockConfig(
             door_name=item.get("door_name", None),

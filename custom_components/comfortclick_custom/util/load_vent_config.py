@@ -1,11 +1,10 @@
-"""Utility helper to read vent yaml config file."""
+"""Load ventilation mappings from saved integration options."""
 
 import logging
 from collections.abc import Mapping
 from typing import Any
 
 from ..entities.vent.vent_config import VentConfig
-from .read_yaml import read_yaml
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -13,8 +12,8 @@ _LOGGER = logging.getLogger(__name__)
 async def load_vent_config(
     options: Mapping[str, Any] | None = None,
 ) -> VentConfig | None:
-    """Read saved ventilation paths, falling back to YAML when not configured."""
-    config = options if options is not None and "vent" in options else await read_yaml()
+    """Read saved ventilation paths, using no entities for unconfigured sections."""
+    config = options if options is not None else {}
     item = config.get("vent", {})
     if not item:
         return None

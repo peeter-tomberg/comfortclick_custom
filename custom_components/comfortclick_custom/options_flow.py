@@ -9,15 +9,14 @@ from typing import Any
 from uuid import uuid4
 
 import voluptuous as vol
-import yaml
 from homeassistant import config_entries
-from homeassistant.const import CONF_VERIFY_SSL
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_VERIFY_SSL
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
+from .connection import connection_errors, normalize_host, validate_input
 from .const import DOMAIN
 from .fixed_mappings import DOOR_SLOTS, METER_SLOTS, VENT_FIELDS, import_fixed_mappings
-from .util.read_yaml import read_yaml
 
 FAN_PATHS = (
     "lock_id",
@@ -150,6 +149,7 @@ class OptionsFlow(config_entries.OptionsFlow):
         self._mappings: list[dict[str, Any]] = []
         self._index: int | None = None
         self._original_section: Any = None
+        self._connection_original: dict[str, Any] | None = None
 
     async def async_step_init(self, _user_input: dict | None = None) -> Any:
         """Choose the kind of configuration to manage."""
@@ -167,17 +167,80 @@ class OptionsFlow(config_entries.OptionsFlow):
         )
 
     async def async_step_connection(self, user_input: dict | None = None) -> Any:
-        """Save TLS preferences even when the controller is unavailable."""
-        if user_input is not None:
-            return self._save_options({CONF_VERIFY_SSL: user_input[CONF_VERIFY_SSL]})
-        verify_ssl = self._entry.options.get(
-            CONF_VERIFY_SSL, self._entry.data.get(CONF_VERIFY_SSL, False)
+        """Validate changed credentials before atomically saving the connection."""
+        if self._connection_original is None:
+            self._connection_original = self._current_connection()
+        if user_input is None:
+            return self._connection_form(self._connection_original)
+        if self._current_connection() != self._connection_original:
+            return self.async_abort(reason="connection_changed")
+        candidate = {**self._connection_original, **user_input}
+        candidate[CONF_PASSWORD] = (
+            user_input.get(CONF_PASSWORD) or self._connection_original[CONF_PASSWORD]
         )
+        try:
+            candidate[CONF_HOST] = normalize_host(candidate[CONF_HOST])
+            credentials_changed = (
+                candidate[CONF_HOST]
+                != self._connection_original[CONF_HOST].strip().rstrip("/")
+            ) or any(
+                candidate[key] != self._connection_original[key]
+                for key in (CONF_USERNAME, CONF_PASSWORD)
+            )
+            if credentials_changed:
+                await validate_input(self.hass, candidate)
+        except Exception as error:  # noqa: BLE001 - Return a credential-safe error.
+            # Re-render from saved values so neither a password nor a rejected
+            # URL containing embedded credentials is reflected in the form.
+            return self._connection_form(
+                self._connection_original, connection_errors(error)
+            )
+        if self._current_connection() != self._connection_original:
+            return self.async_abort(reason="connection_changed")
+        options = {**self._entry.options, CONF_VERIFY_SSL: candidate[CONF_VERIFY_SSL]}
+        data = {**self._entry.data, **candidate}
+        was_loaded = self._entry.state is config_entries.ConfigEntryState.LOADED
+        self.hass.config_entries.async_update_entry(
+            self._entry, data=data, options=options
+        )
+        if not was_loaded:
+            self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
+        # Both dictionaries were saved together above. Let the existing update
+        # listener reload once; the flow manager must not write options again.
+        return self.async_create_entry(title="", data=None)
+
+    def _current_connection(self) -> dict[str, Any]:
+        """Read only connection fields for concurrent-edit detection."""
+        return {
+            CONF_HOST: self._entry.data.get(CONF_HOST, ""),
+            CONF_USERNAME: self._entry.data.get(CONF_USERNAME, ""),
+            CONF_PASSWORD: self._entry.data.get(CONF_PASSWORD, ""),
+            CONF_VERIFY_SSL: self._entry.options.get(
+                CONF_VERIFY_SSL, self._entry.data.get(CONF_VERIFY_SSL, False)
+            ),
+        }
+
+    def _connection_form(
+        self, values: dict[str, Any], errors: dict[str, str] | None = None
+    ) -> Any:
+        """Show public settings and an empty masked replacement-password field."""
         return self.async_show_form(
             step_id="connection",
             data_schema=vol.Schema(
-                {vol.Required(CONF_VERIFY_SSL, default=verify_ssl): bool}
+                {
+                    vol.Required(CONF_HOST, default=values[CONF_HOST]): str,
+                    vol.Required(CONF_USERNAME, default=values[CONF_USERNAME]): str,
+                    vol.Optional(CONF_PASSWORD): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD
+                        )
+                    ),
+                    vol.Required(
+                        CONF_VERIFY_SSL, default=values[CONF_VERIFY_SSL]
+                    ): bool,
+                }
             ),
+            errors=errors or {},
         )
 
     async def _open_section(self, section: str) -> Any:
@@ -186,13 +249,8 @@ class OptionsFlow(config_entries.OptionsFlow):
         self._index = None
         self._original_section = deepcopy(self._entry.options.get(section))
         try:
-            source = (
-                self._entry.options
-                if section in self._entry.options
-                else await read_yaml()
-            )
-            self._mappings = _import_mappings(source, section)
-        except (OSError, ValueError, TypeError, yaml.YAMLError):
+            self._mappings = _import_mappings(self._entry.options, section)
+        except (ValueError, TypeError):
             return self.async_show_form(
                 step_id=section,
                 data_schema=vol.Schema({}),
@@ -222,15 +280,10 @@ class OptionsFlow(config_entries.OptionsFlow):
         self._index = None
         self._original_section = deepcopy(self._entry.options.get(section))
         try:
-            source = (
-                self._entry.options
-                if section in self._entry.options
-                else await read_yaml()
-            )
             self._mappings = import_fixed_mappings(
-                source, section, self._entry.entry_id
+                self._entry.options, section, self._entry.entry_id
             )
-        except (OSError, ValueError, TypeError, yaml.YAMLError):
+        except (ValueError, TypeError):
             return self.async_show_form(
                 step_id=section,
                 data_schema=vol.Schema({}),
@@ -363,19 +416,14 @@ class OptionsFlow(config_entries.OptionsFlow):
         self._section = "vent"
         self._original_section = deepcopy(self._entry.options.get("vent"))
         try:
-            source = (
-                self._entry.options
-                if "vent" in self._entry.options
-                else await read_yaml()
-            )
-            self._vent = deepcopy(source.get("vent", {}))
+            self._vent = deepcopy(self._entry.options.get("vent", {}))
             if not isinstance(self._vent, dict):
                 return self.async_show_form(
                     step_id="ventilation",
                     data_schema=vol.Schema({}),
                     errors={"base": "cannot_load_mappings"},
                 )
-        except (OSError, ValueError, TypeError, yaml.YAMLError):
+        except (ValueError, TypeError):
             return self.async_show_form(
                 step_id="ventilation",
                 data_schema=vol.Schema({}),

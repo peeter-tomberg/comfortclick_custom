@@ -1,11 +1,10 @@
-"""Utility helper to read thermostats yaml config file."""
+"""Load thermostat mappings from saved integration options."""
 
 import logging
 from collections.abc import Mapping
 from typing import Any
 
 from ..entities.ac.room_thermostat import RoomThermostatConfig
-from .read_yaml import read_yaml
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -13,12 +12,8 @@ _LOGGER = logging.getLogger(__name__)
 async def load_thermostats_config(
     options: Mapping[str, Any] | None = None,
 ) -> list[RoomThermostatConfig]:
-    """Read saved AC mappings, falling back to YAML when not configured."""
-    data = (
-        options
-        if options is not None and "thermostats" in options
-        else await read_yaml()
-    )
+    """Read saved AC mappings, using no entities for unconfigured sections."""
+    data = options if options is not None else {}
 
     return [
         RoomThermostatConfig(

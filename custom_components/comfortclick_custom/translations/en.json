@@ -17,7 +17,8 @@
       "cannot_connect": "Unable to connect to the controller.",
       "invalid_auth": "The controller rejected the credentials.",
       "ssl_error": "The certificate could not be verified. Use a trusted certificate matching the controller URL, or disable verification only for a trusted local controller.",
-      "unknown": "An unexpected error occurred. Check the Home Assistant log."
+      "unknown": "An unexpected error occurred. Check the Home Assistant log.",
+      "invalid_host": "Enter an HTTP or HTTPS controller URL without embedded credentials, a query, or a fragment."
     }
   },
   "options": {
@@ -37,8 +38,11 @@
       },
       "connection": {
         "title": "ComfortClick connection",
-        "description": "Certificate verification is off unless you enable it. Enable it when your controller has a trusted certificate. Saving reloads the integration. Existing entity mappings are preserved.",
+        "description": "Update the controller address and login. Leave Password blank to keep the saved password. Changed login details are checked before saving. Enable certificate verification when your controller has a trusted certificate.",
         "data": {
+          "host": "Controller URL",
+          "username": "Username",
+          "password": "Password (leave blank to keep current)",
           "verify_ssl": "Verify SSL certificate"
         }
       },
@@ -109,11 +113,11 @@
       },
       "fans": {
         "title": "Fans",
-        "description": "Fix the YAML configuration and submit to retry loading the mappings."
+        "description": "The stored mappings could not be loaded. Check the integration log for details, then retry."
       },
       "thermostats": {
         "title": "Air conditioners",
-        "description": "Fix the YAML configuration and submit to retry loading the mappings."
+        "description": "The stored mappings could not be loaded. Check the integration log for details, then retry."
       },
       "utilities": {
         "title": "Utility meters",
@@ -191,13 +195,19 @@
       "invalid_range": "The maximum temperature must be greater than the minimum.",
       "invalid_type": "Select a supported meter type.",
       "invalid_unit": "Select a water unit for water, or an energy unit for electricity and heating.",
-      "cannot_load_mappings": "Unable to read the mappings. Check comfortclick_custom.yaml for invalid YAML or an invalid category list, then retry.",
+      "cannot_load_mappings": "Unable to read the stored mappings. Check the integration log for details.",
       "incompatible_meter_type": "Water and energy meters cannot share the same history. Add a separate meter mapping for this type.",
-      "cannot_load_fixed_mappings": "An existing mapping could not be assigned uniquely to the fixed slots. Check its name or explicit slot in comfortclick_custom.yaml. No mappings have been changed."
+      "cannot_load_fixed_mappings": "An existing mapping could not be assigned uniquely to the fixed slots. No mappings have been changed.",
+      "invalid_host": "Enter an HTTP or HTTPS controller URL without embedded credentials, a query, or a fragment.",
+      "invalid_auth": "The controller rejected the credentials.",
+      "cannot_connect": "Unable to connect to the controller.",
+      "ssl_error": "The certificate could not be verified. Use a trusted certificate matching the controller URL, or disable verification only for a trusted local controller.",
+      "unknown": "An unexpected error occurred. Check the Home Assistant log."
     },
     "abort": {
       "mappings_changed": "These mappings changed in another configuration window. Reopen Configure to use the latest values.",
-      "fixed_slots": "This category has predefined slots. Open its menu to edit a slot; slots cannot be added or removed."
+      "fixed_slots": "This category has predefined slots. Open its menu to edit a slot; slots cannot be added or removed.",
+      "connection_changed": "Connection settings changed in another window. Reopen Configure to use the latest values."
     }
   },
   "selector": {

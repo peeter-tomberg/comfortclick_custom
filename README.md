@@ -32,7 +32,7 @@ to manage another.
 | Air conditioners | Add, edit, or remove multiple thermostats and assign each to a Home Assistant room |
 | Fans | Add, edit, or remove multiple fans and assign each to a Home Assistant room |
 | Doorbell | Information about the one event entity created automatically per integration entry |
-| Connection | HTTPS certificate verification |
+| Connection | Controller URL, username, password, and HTTPS certificate verification |
 
 Doors and meters have fixed slots. Select a slot to edit its controller path;
 their names and meter types are not editable. Leave a path blank to stop exposing
@@ -43,8 +43,14 @@ Path fields are searchable lists of device paths already received from the
 controller. You can also enter a path manually, including while the controller is
 offline. Paths are preserved exactly, including trailing spaces: a controller
 path ending in `"Setpoint "` is different from one ending in `"Setpoint"`.
-Opening or editing forms does not send device commands or open extra controller
-connections. Temperature limits and steps use Celsius.
+Opening or editing mapping forms does not send device commands or open extra
+controller connections. Temperature limits and steps use Celsius.
+
+In **Connection**, leave Password blank to retain the saved password. The saved
+password is never displayed. Changes to the controller URL, username, or password
+are checked by logging in before they replace the working connection. Failed
+validation leaves the saved settings unchanged. Changing only certificate
+verification remains possible while the controller is offline.
 
 - **Fans:** map the lock (true means off), fan level, heating-active state, current
   temperature, and target temperature.
@@ -60,13 +66,16 @@ The **Room** field on fan and air-conditioner forms uses existing Home Assistant
 areas. Existing entity room assignments are suggested when importing a mapping.
 Clearing the field removes the entity's room assignment when the integration reloads.
 
-Existing `comfortclick_custom.yaml` mappings are shown automatically. A category
-continues using YAML until you first save a change to that category; after that,
-its configuration is stored in the integration's options. An explicit empty saved
-category does not fall back to YAML. Importing doors and meters matches their
-existing names and types to fixed slots, regardless of YAML order. If a record
-cannot be matched unambiguously, the form reports an error without discarding it.
-Use the door and meter names listed above to resolve an ambiguous legacy mapping.
+All configuration is stored in Home Assistant. Existing installations import
+their remaining `comfortclick_custom.yaml` mappings once when upgrading. Categories
+already saved through the UI take precedence, including explicitly empty ones.
+After successful migration, the YAML file is no longer read and can be archived
+or removed. New installations do not need a YAML file.
+
+Migration preserves existing identities and exact controller paths. If legacy
+configuration is malformed or its doors/meters cannot be matched to the fixed
+catalog, migration stops without changing the stored configuration. Correct the
+legacy file and retry the integration before removing it.
 
 Editing an existing mapping preserves its entity identity, references, and
 recorded history. Change a meter's path only to another path for the same physical
@@ -139,8 +148,9 @@ are preserved, so an entry with verification enabled keeps it enabled.
 To enable verification, use a controller URL whose hostname matches its trusted
 certificate, then open **Settings → Devices & services → ComfortClick → Configure**
 → **Connection** and enable **Verify SSL certificate**. This setting is also
-available during initial setup. Options can be saved while the controller is unavailable; Home Assistant
-reloads the entry after the change. No entities need to be deleted.
+available during initial setup. A change to certificate verification alone can be
+saved while the controller is unavailable; Home Assistant reloads the entry after
+the change. No entities need to be deleted.
 
 With verification off, Home Assistant cannot authenticate the controller's
 certificate, exposing credentials and commands to interception. Enable verification

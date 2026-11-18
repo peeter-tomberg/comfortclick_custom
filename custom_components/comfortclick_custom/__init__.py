@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import yaml
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_HOST,
@@ -17,6 +19,9 @@ from homeassistant.const import (
 from .api import ApiInstance
 from .const import DOMAIN
 from .coordinator import ComfortClickCoordinator
+from .migration import CONFIG_ENTRY_VERSION, async_import_mapping_options
+
+_LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,6 +48,29 @@ class RuntimeData:
 
     coordinator: ComfortClickCoordinator
     cancel_update_listener: Callable
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Persist all legacy mappings before enabling options-only configuration."""
+    if config_entry.version > CONFIG_ENTRY_VERSION:
+        _LOGGER.error("Cannot load a newer ComfortClick configuration version")
+        return False
+    if config_entry.version == CONFIG_ENTRY_VERSION:
+        return True
+    try:
+        options = await async_import_mapping_options(config_entry.options)
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
+        # Parser exceptions can contain raw YAML values, so omit their contents.
+        _LOGGER.error(  # noqa: TRY400
+            "Cannot migrate ComfortClick mappings. Correct malformed mappings or "
+            "ambiguous door/meter slot names in comfortclick_custom.yaml, then retry. "
+            "The saved configuration and version have not been changed"
+        )
+        return False
+    hass.config_entries.async_update_entry(
+        config_entry, options=options, version=CONFIG_ENTRY_VERSION
+    )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ApiConfigEntry) -> bool:

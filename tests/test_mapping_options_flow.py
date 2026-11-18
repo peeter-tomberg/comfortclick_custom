@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, call
 import pytest
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntries, ConfigEntry, ConfigEntryState
-from homeassistant.const import CONF_VERIFY_SSL
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import area_registry, entity_registry
@@ -95,6 +95,18 @@ LEGACY_IDENTITIES = {
     "thermostats": f"room-1-{THERMOSTAT['heating_id']}",
 }
 CACHED_PATHS = ("Cached\\First", "Cached\\Second")
+CONNECTION = {
+    CONF_HOST: "http://controller.test",
+    CONF_USERNAME: "test-user",
+    CONF_PASSWORD: "test-password",
+}
+EMPTY_MAPPINGS = {
+    "fans": [],
+    "thermostats": [],
+    "locks": [],
+    "utilities": [],
+    "vent": {},
+}
 
 
 @dataclass
@@ -103,15 +115,31 @@ class FlowContext:
     entry: MagicMock
     hass: MagicMock
     api: MagicMock
-    read_yaml: AsyncMock
 
 
 @pytest.fixture
-def context(monkeypatch: pytest.MonkeyPatch) -> FlowContext:
+def context() -> FlowContext:
     entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test-controller"
-    entry.data = {}
-    entry.options = {CONF_VERIFY_SSL: True, "unrelated": {"keep": [1]}}
+    entry.version = 2
+    entry.data = CONNECTION.copy()
+    entry.options = {
+        CONF_VERIFY_SSL: True,
+        "unrelated": {"keep": [1]},
+        **{
+            key: [{**deepcopy(value), "unique_id": LEGACY_IDENTITIES[key]}]
+            for key, value in MAPPINGS.items()
+        },
+        "utilities": [
+            {**deepcopy(value), "slot": slot, "unique_id": value["id"]}
+            for slot, value in reversed(METERS.items())
+        ],
+        "locks": [
+            {**deepcopy(value), "slot": slot, "unique_id": value["door_id"]}
+            for slot, value in reversed(DOORS.items())
+        ],
+        "vent": deepcopy(VENT),
+    }
     entry.state = ConfigEntryState.LOADED
     api = MagicMock(spec=ApiInstance)
     api.get_device_paths.return_value = CACHED_PATHS
@@ -122,18 +150,9 @@ def context(monkeypatch: pytest.MonkeyPatch) -> FlowContext:
         },
     }
     hass.config_entries = MagicMock()
-    reader = AsyncMock(
-        return_value={
-            **{key: [deepcopy(value)] for key, value in MAPPINGS.items()},
-            "utilities": deepcopy(list(METERS.values())[::-1]),
-            "locks": deepcopy(list(DOORS.values())[::-1]),
-            "vent": deepcopy(VENT),
-        }
-    )
-    monkeypatch.setattr(options_flow, "read_yaml", reader)
     flow = config_flow.ConfigFlow.async_get_options_flow(entry)
     flow.hass = hass
-    return FlowContext(flow, entry, hass, api, reader)
+    return FlowContext(flow, entry, hass, api)
 
 
 async def open_section(context: FlowContext, section: str) -> dict[str, Any]:
@@ -170,12 +189,11 @@ async def test_init_menu_keeps_connection_and_each_mapping_category(
         "doorbell",
         "connection",
     ]
-    context.read_yaml.assert_not_awaited()
     assert context.api.mock_calls == []
 
 
 @pytest.mark.parametrize("section", MAPPINGS)
-async def test_category_displays_yaml_names_without_persisting(
+async def test_category_displays_saved_names_without_persisting(
     context: FlowContext, section: str
 ) -> None:
     original_options = deepcopy(context.entry.options)
@@ -191,12 +209,11 @@ async def test_category_displays_yaml_names_without_persisting(
     ]
     assert MAPPINGS[section]["name"] in result["description_placeholders"]["configured"]
     assert context.entry.options == original_options
-    assert "unique_id" not in context.read_yaml.return_value[section][0]
     context.hass.config_entries.async_update_entry.assert_not_called()
 
 
 @pytest.mark.parametrize("section", MAPPINGS)
-async def test_explicit_empty_list_overrides_yaml_and_add_creates_new_identity(
+async def test_empty_list_offers_add_and_creates_new_identity(
     context: FlowContext, section: str
 ) -> None:
     context.entry.options[section] = []
@@ -217,13 +234,12 @@ async def test_explicit_empty_list_overrides_yaml_and_add_creates_new_identity(
     assert result["data"][CONF_VERIFY_SSL] is True
     assert result["data"]["unrelated"] == {"keep": [1]}
     assert context.entry.options == original_options
-    context.read_yaml.assert_not_awaited()
     context.hass.config_entries.async_schedule_reload.assert_not_called()
 
 
 @pytest.mark.parametrize("section", MAPPINGS)
 @pytest.mark.parametrize("saved_identity", [None, "immutable-mapping-id"])
-async def test_edit_preserves_legacy_or_saved_identity_after_path_change(
+async def test_edit_preserves_migrated_or_new_identity_after_path_change(
     context: FlowContext, section: str, saved_identity: str | None
 ) -> None:
     original = deepcopy(MAPPINGS[section])
@@ -249,7 +265,6 @@ async def test_edit_preserves_legacy_or_saved_identity_after_path_change(
     assert saved["name"] == "Renamed"
     assert saved[PRIMARY_PATHS[section]] == "New\\Path"
     assert context.entry.options == original_options
-    assert "unique_id" not in context.read_yaml.return_value[section][0]
 
 
 @pytest.mark.parametrize("section", MAPPINGS)
@@ -266,7 +281,7 @@ async def test_removal_requires_confirmation_and_saves_explicit_empty_list(
     assert confirmation["description_placeholders"]["name"] == MAPPINGS[section]["name"]
     assert confirmation["data_schema"]({}) == {"confirm": False}
     assert cancelled["type"] is FlowResultType.MENU
-    assert section not in context.entry.options
+    assert len(context.entry.options[section]) == 1
 
     await context.flow.async_step_remove_mapping({"mapping": "0"})
     saved = await context.flow.async_step_confirm_remove({"confirm": True})
@@ -390,7 +405,7 @@ async def test_duplicate_paths_reject_add_but_allow_unchanged_edit(
 
     assert rejected["type"] is FlowResultType.FORM
     assert rejected["errors"][field] == "duplicate_path"
-    assert section not in context.entry.options
+    assert len(context.entry.options[section]) == 1
 
     await context.flow.async_step_edit_mapping({"mapping": "0"})
     accepted = await submit(context, section, deepcopy(MAPPINGS[section]))
@@ -457,13 +472,13 @@ async def test_heating_only_thermostat_clears_optional_fan(
 async def test_fixed_catalog_menus_have_all_slots_and_no_add_remove(
     context: FlowContext, section: str, prefix: str, slots: dict
 ) -> None:
-    context.read_yaml.return_value = {}
+    context.entry.options[section] = []
 
     result = await open_section(context, section)
 
     assert result["type"] is FlowResultType.MENU
     assert result["menu_options"] == [*(f"{prefix}_{slot}" for slot in slots), "init"]
-    assert section not in context.entry.options
+    assert context.entry.options[section] == []
 
 
 @pytest.mark.parametrize(
@@ -480,22 +495,21 @@ async def test_fixed_catalog_menus_have_all_slots_and_no_add_remove(
         ("locks", [DOORS["main"], DOORS["main"]]),
     ],
 )
-async def test_unrecognized_or_ambiguous_legacy_catalog_is_not_discarded(
+async def test_unrecognized_or_ambiguous_saved_catalog_is_not_discarded(
     context: FlowContext, section: str, rows: list[dict]
 ) -> None:
-    context.read_yaml.return_value[section] = deepcopy(rows)
+    context.entry.options[section] = deepcopy(rows)
 
     result = await open_section(context, section)
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_load_fixed_mappings"}
-    assert context.read_yaml.return_value[section] == rows
-    assert section not in context.entry.options
+    assert context.entry.options[section] == rows
 
 
 @pytest.mark.parametrize("slot", METERS)
-@pytest.mark.parametrize("source", ["yaml", "options"])
-async def test_fixed_meter_edit_preserves_all_five_roles_and_legacy_identity(
+@pytest.mark.parametrize("source", ["migrated", "options"])
+async def test_fixed_meter_edit_preserves_all_five_roles_and_saved_identity(
     context: FlowContext, slot: str, source: str
 ) -> None:
     if source == "options":
@@ -575,11 +589,11 @@ async def test_fixed_meter_rejects_incompatible_unit_and_duplicate_path(
         {"id": METERS["electricity_day"]["id"], "unit": "default"}
     )
     assert rejected["errors"]["id"] == "duplicate_path"
-    assert "utilities" not in context.entry.options
+    assert len(context.entry.options["utilities"]) == 5
 
 
 @pytest.mark.parametrize("slot", DOORS)
-@pytest.mark.parametrize("source", ["yaml", "options"])
+@pytest.mark.parametrize("source", ["migrated", "options"])
 async def test_fixed_door_edit_preserves_three_slots_and_existing_identity(
     context: FlowContext, slot: str, source: str
 ) -> None:
@@ -620,7 +634,7 @@ async def test_duplicate_door_paths_do_not_save_or_command_controller(
     result = await context.flow.async_step_door({"door_id": DOORS["garage"]["door_id"]})
 
     assert result["errors"]["door_id"] == "duplicate_path"
-    assert "locks" not in context.entry.options
+    assert len(context.entry.options["locks"]) == 3
     assert all(item[0] == "get_device_paths" for item in context.api.mock_calls)
 
 
@@ -652,12 +666,9 @@ async def test_fixed_slot_can_clear_mapping_without_removing_slot(
 
 
 @pytest.mark.parametrize("group", VENT_GROUPS)
-@pytest.mark.parametrize("source", ["yaml", "options"])
 async def test_single_ventilation_preserves_other_controls_when_editing_one_group(
-    context: FlowContext, group: str, source: str
+    context: FlowContext, group: str
 ) -> None:
-    if source == "options":
-        context.entry.options["vent"] = deepcopy(VENT)
     original_options = deepcopy(context.entry.options)
     menu = await context.flow.async_step_ventilation()
     form = await getattr(context.flow, f"async_step_{group}")()
@@ -689,24 +700,15 @@ async def test_doorbell_information_does_not_create_duplicate_entities(
     assert context.api.mock_calls == []
 
 
-@pytest.mark.parametrize("broken_source", [None, [], {"fans": None}, {"fans": ["bad"]}])
-async def test_malformed_yaml_shows_recoverable_error(
-    context: FlowContext, broken_source: Any
+@pytest.mark.parametrize("broken_mappings", [None, {}, ["bad"]])
+async def test_malformed_saved_options_show_recoverable_error(
+    context: FlowContext, broken_mappings: Any
 ) -> None:
-    context.read_yaml.return_value = broken_source
+    context.entry.options["fans"] = broken_mappings
 
     result = await context.flow.async_step_fans()
 
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "cannot_load_mappings"}
-    assert "fans" not in context.entry.options
-
-
-async def test_unreadable_yaml_shows_recoverable_error(context: FlowContext) -> None:
-    context.read_yaml.side_effect = OSError("Configuration cannot be read")
-
-    result = await context.flow.async_step_fans()
-
     assert result["errors"] == {"base": "cannot_load_mappings"}
 
 
@@ -770,7 +772,6 @@ async def test_read_only_options_mapping_is_supported(
     assert result["data"][section][0]["name"] == "New name"
     assert result["data"][section][0]["unique_id"] == "stable"
     assert original_options[section][0]["name"] == MAPPINGS[section]["name"]
-    context.read_yaml.assert_not_awaited()
 
 
 @pytest.mark.parametrize("section", MAPPINGS)
@@ -856,12 +857,12 @@ async def test_real_flow_manager_validates_persists_and_reloads_once(
         discovery_keys=MappingProxyType({}),
         domain=DOMAIN,
         minor_version=1,
-        options={section: [], CONF_VERIFY_SSL: True},
+        options={**deepcopy(EMPTY_MAPPINGS), CONF_VERIFY_SSL: True},
         source=config_entries.SOURCE_USER,
         state=ConfigEntryState.LOADED,
         title="Test controller",
         unique_id="test-controller",
-        version=1,
+        version=2,
     )
     await managed_hass.config_entries.async_add(entry)
     remove_listener = entry.add_update_listener(
@@ -934,12 +935,12 @@ async def test_real_flow_manager_saves_fixed_catalog_and_single_ventilation(
         discovery_keys=MappingProxyType({}),
         domain=DOMAIN,
         minor_version=1,
-        options={"utilities": [], "locks": [], "vent": {}, CONF_VERIFY_SSL: True},
+        options={**deepcopy(EMPTY_MAPPINGS), CONF_VERIFY_SSL: True},
         source=config_entries.SOURCE_USER,
         state=ConfigEntryState.LOADED,
         title="Test controller",
         unique_id="test-controller",
-        version=1,
+        version=2,
     )
     await managed_hass.config_entries.async_add(entry)
     remove_listener = entry.add_update_listener(integration._async_update_listener)  # noqa: SLF001
@@ -977,16 +978,16 @@ async def test_real_flow_manager_returns_from_doorbell_info_and_saves_connection
     managed_hass: HomeAssistant,
 ) -> None:
     entry = ConfigEntry(
-        data={},
+        data=CONNECTION.copy(),
         discovery_keys=MappingProxyType({}),
         domain=DOMAIN,
         minor_version=1,
-        options={CONF_VERIFY_SSL: True},
+        options={**deepcopy(EMPTY_MAPPINGS), CONF_VERIFY_SSL: True},
         source=config_entries.SOURCE_USER,
         state=ConfigEntryState.LOADED,
         title="Test controller",
         unique_id="test-controller",
-        version=1,
+        version=2,
     )
     await managed_hass.config_entries.async_add(entry)
     manager = managed_hass.config_entries.options
@@ -999,10 +1000,17 @@ async def test_real_flow_manager_returns_from_doorbell_info_and_saves_connection
 
     form = await manager.async_configure(flow_id, {"next_step_id": "connection"})
     assert form["step_id"] == "connection"
-    result = await manager.async_configure(flow_id, {CONF_VERIFY_SSL: False})
+    result = await manager.async_configure(
+        flow_id,
+        {
+            CONF_HOST: CONNECTION[CONF_HOST],
+            CONF_USERNAME: CONNECTION[CONF_USERNAME],
+            CONF_VERIFY_SSL: False,
+        },
+    )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert dict(entry.options) == {CONF_VERIFY_SSL: False}
+    assert dict(entry.options) == {**EMPTY_MAPPINGS, CONF_VERIFY_SSL: False}
 
 
 @pytest.mark.parametrize("name", [None, ""])
@@ -1020,7 +1028,7 @@ async def test_fixed_form_uses_slot_label_for_empty_legacy_name(
         row["type"] = "heating"
     else:
         row["slot"] = slot
-    context.read_yaml.return_value[section] = [row]
+    context.entry.options[section] = [row]
 
     await open_section(context, section)
     form = await getattr(context.flow, f"async_step_{select_step}")()

@@ -82,8 +82,8 @@ def import_fixed_mappings(
             mapping = {"door_name": DOOR_SLOTS[slot], path_key: ""}
         mapping.update(imported.get(slot, {}))
         mapping["slot"] = slot
-        mapping.setdefault(
-            "unique_id", mapping.get(path_key) or f"{entry_id}-{section}-{slot}"
-        )
+        path = mapping.get(path_key)
+        legacy_id = path if isinstance(path, str) and path.strip() else None
+        mapping.setdefault("unique_id", legacy_id or f"{entry_id}-{section}-{slot}")
         result.append(mapping)
     return result

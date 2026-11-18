@@ -1,4 +1,4 @@
-"""Utility helper to read utilities yaml config file."""
+"""Load utility meter mappings from saved integration options."""
 
 import logging
 from collections.abc import Mapping
@@ -13,13 +13,12 @@ from ..entities.utilities.utilities_sensor import (
     UtilitiesSensorConfig,
     WaterSensor,
 )
-from .read_yaml import read_yaml
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class UnknownDescriptionTypeError(Exception):
-    """Raised when unknown description is provided in YAML configuration file."""
+    """Raised when a saved utility mapping specifies an unknown meter type."""
 
 
 def _map_type_to_description(
@@ -42,10 +41,8 @@ def _map_type_to_description(
 async def load_utilities_config(
     options: Mapping[str, Any] | None = None,
 ) -> list[UtilitiesSensorConfig]:
-    """Read saved meter mappings, falling back to YAML when not configured."""
-    data = (
-        options if options is not None and "utilities" in options else await read_yaml()
-    )
+    """Read saved meter mappings, using no entities for unconfigured sections."""
+    data = options if options is not None else {}
 
     return [
         UtilitiesSensorConfig(

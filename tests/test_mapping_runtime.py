@@ -88,22 +88,22 @@ def coordinator() -> MagicMock:
     return instance
 
 
-async def test_missing_option_category_uses_yaml_and_keeps_legacy_identity(
+async def test_saved_mapping_without_explicit_id_keeps_legacy_identity(
     mapping_kind: str,
     mappings: dict[str, list[dict[str, Any]]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module, entity_class, identity_field, prefix = MAPPING_KINDS[mapping_kind]
     read = AsyncMock(return_value=mappings)
-    monkeypatch.setattr(module, "read_yaml", read)
+    monkeypatch.setattr(read_yaml.aiofiles, "open", read)
     load = getattr(module, f"load_{mapping_kind}_config")
 
-    configs = await load({"verify_ssl": True})
+    configs = await load({"verify_ssl": True, **mappings})
     entity = entity_class(coordinator(), configs[0])
 
     assert entity.unique_id == prefix + mappings[mapping_kind][0][identity_field]
     assert entity.name == mappings[mapping_kind][0]["name"]
-    read.assert_awaited_once_with()
+    read.assert_not_called()
 
 
 async def test_explicit_empty_options_disable_category_without_reading_yaml(
@@ -111,7 +111,7 @@ async def test_explicit_empty_options_disable_category_without_reading_yaml(
 ) -> None:
     module = MAPPING_KINDS[mapping_kind][0]
     read = AsyncMock(side_effect=AssertionError("YAML must not override saved options"))
-    monkeypatch.setattr(module, "read_yaml", read)
+    monkeypatch.setattr(read_yaml.aiofiles, "open", read)
     load = getattr(module, f"load_{mapping_kind}_config")
 
     assert await load({mapping_kind: []}) == []
@@ -132,7 +132,7 @@ async def test_imported_identity_survives_name_and_controller_path_edits(
         "unique_id": prefix + original[identity_field],
     }
     read = AsyncMock(return_value=mappings)
-    monkeypatch.setattr(module, "read_yaml", read)
+    monkeypatch.setattr(read_yaml.aiofiles, "open", read)
     load = getattr(module, f"load_{mapping_kind}_config")
 
     configs = await load({mapping_kind: [edited]})

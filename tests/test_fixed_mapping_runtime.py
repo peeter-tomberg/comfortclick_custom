@@ -30,6 +30,7 @@ from custom_components.comfortclick_custom.util import (
     load_lock_config,
     load_utilities_config,
     load_vent_config,
+    read_yaml,
 )
 
 if TYPE_CHECKING:
@@ -77,7 +78,7 @@ async def test_fixed_lock_slots_skip_blank_paths_and_keep_imported_identity(
     coordinator: MagicMock, values: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     read = AsyncMock(side_effect=AssertionError("Saved options must not read YAML"))
-    monkeypatch.setattr(load_lock_config, "read_yaml", read)
+    monkeypatch.setattr(read_yaml.aiofiles, "open", read)
     options = {
         "locks": [
             {
@@ -101,16 +102,18 @@ async def test_fixed_lock_slots_skip_blank_paths_and_keep_imported_identity(
     read.assert_not_awaited()
 
 
-async def test_lock_yaml_fallback_preserves_original_door_identity(
+async def test_saved_lock_preserves_original_door_identity(
     coordinator: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     read = AsyncMock(
         return_value={"locks": [{"door_name": "Door", "door_id": r"Room\\Door"}]}
     )
-    monkeypatch.setattr(load_lock_config, "read_yaml", read)
-    configs = await load_lock_config.load_lock_config({"verify_ssl": False})
+    monkeypatch.setattr(read_yaml.aiofiles, "open", read)
+    configs = await load_lock_config.load_lock_config(
+        {"locks": [{"door_name": "Door", "door_id": r"Room\\Door"}]}
+    )
     assert BuildingLock(coordinator, configs[0]).unique_id == r"Room\\Door"
-    read.assert_awaited_once_with()
+    read.assert_not_called()
 
 
 async def test_unconfigured_fixed_slots_create_no_entities(
@@ -193,12 +196,11 @@ async def test_explicit_empty_vent_overrides_yaml(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     read = AsyncMock(return_value={"vent": MODE_PATHS})
-    monkeypatch.setattr(load_vent_config, "read_yaml", read)
+    monkeypatch.setattr(read_yaml.aiofiles, "open", read)
     assert await load_vent_config.load_vent_config({"vent": {}}) is None
     read.assert_not_awaited()
-    fallback = await load_vent_config.load_vent_config({})
-    assert fallback.has_mode_paths
-    read.assert_awaited_once_with()
+    assert await load_vent_config.load_vent_config({}) is None
+    read.assert_not_called()
 
 
 @pytest.mark.parametrize(

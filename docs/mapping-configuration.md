@@ -14,10 +14,24 @@ device commands or open additional controller connections.
 | `thermostats` | Repeatable list | Name, paths, temperature range/step, and Home Assistant area |
 | Doorbell | One automatically created event entity per entry | No mapping form |
 
-Each category loads from config-entry options when its key is present, otherwise
-from `comfortclick_custom.yaml`. Saving a form writes the entire corresponding
-category and keeps other options intact. An explicit empty category does not
-fall back to YAML. A missing YAML file is supported.
+Version 2 entries keep every category in config-entry options. Runtime loaders
+and mapping forms read these options only. Saving a form writes the corresponding
+category and keeps other options intact. New entries start with empty categories.
+
+The version 1 migration reads `comfortclick_custom.yaml` once for categories not
+already saved in options. Existing options take precedence, including empty lists
+and dictionaries. It computes the complete migration before updating the entry;
+malformed legacy configuration leaves its version and options unchanged. Missing
+files produce empty categories. After migration the file can be archived or
+removed, and later changes to it have no effect.
+
+Connection credentials remain in config-entry data. The Connection form exposes
+the controller URL, username, an optional masked password, and certificate
+verification. It never pre-fills or returns the saved password; a blank password
+retains it. Changed credentials or URL are validated through a separately owned
+login/logout client before saving. Validation failures retain the existing
+connection, and concurrent connection edits are rejected. TLS-only changes can
+still be saved offline. No device commands are sent by these forms.
 
 `fixed_mappings.py` maps legacy door and meter records to semantic slots rather
 than list positions. Explicit slot keys take precedence; legacy records are
@@ -50,11 +64,15 @@ limits, positive setpoint steps, and compatible meter units.
 ```mermaid
 flowchart TD
     Cache[Cached controller paths] --> UI[Home Assistant options forms]
-    YAML[Legacy YAML fallback] --> UI
+    YAML[Legacy YAML] --> Migration[One-time version 1 migration]
+    Migration --> Options
     UI --> Options[Config entry options]
     Options --> Loaders[Configuration loaders]
-    YAML --> Loaders
+    Connection[Connection form] --> Data[Config entry credentials]
+    Data --> Runtime[Coordinator setup]
+    Options --> Runtime
     Loaders --> Entities[Fan, climate, lock, sensor and select entities]
+    Runtime --> API[ComfortClick API]
     Entities --> API[ComfortClick API]
     Events[Controller ring actions] --> Doorbell[One doorbell event entity]
 ```
@@ -71,6 +89,7 @@ before scheduling a retry. Concurrent edits to the same category are rejected;
 changes to other categories are retained.
 
 Tests cover native options-flow manager routing, read-only options mappings,
-persistence and reloads, semantic legacy imports, stable identities, optional and
-offline paths, trailing-space identifiers, room assignment, validation, removal,
-and runtime loading. They use the repository's real Home Assistant test runtime.
+persistence and reloads, atomic legacy migration, stable identities, optional and
+offline paths, trailing-space identifiers, room assignment, credential masking,
+connection validation, removal, and runtime loading without YAML. They use the
+repository's real Home Assistant test runtime.
