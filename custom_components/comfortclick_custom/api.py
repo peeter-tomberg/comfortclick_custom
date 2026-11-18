@@ -20,8 +20,50 @@ def _sanitise_device_name(device_name: str) -> str:
     return device_name.replace("\\\\", "\\")
 
 
-def _compare_device_names(a: str, b: str) -> bool:
-    return _sanitise_device_name(a) == _sanitise_device_name(b)
+def _validate_result(data: typing.Any) -> typing.Any:
+    """Reject explicit application errors while allowing legacy statusless replies."""
+    if not isinstance(data, dict):
+        return data
+    status = data.get("Status")
+    normalised_status = (
+        status.casefold().replace(" ", "") if isinstance(status, str) else ""
+    )
+    if normalised_status in {
+        "unauthorized",
+        "unauthorised",
+        "notauthenticated",
+        "authenticationrequired",
+        "sessionexpired",
+    }:
+        raise AuthorizationError({"message": "Server rejected the session"})
+    if (
+        normalised_status in {"error", "failed", "failure"}
+        or data.get("Success") is False
+        or data.get("Error")
+    ):
+        raise ApiResponseError({"message": "Server reported an application error"})
+    return data
+
+
+def _require_updates(data: typing.Any, key: str) -> list[dict]:
+    """Validate all update records before changing any cached values."""
+    if not isinstance(data, dict):
+        raise ApiResponseError({"message": "Expected a response object"})
+    records = data.get(key, [])
+    if not isinstance(records, list):
+        raise ApiResponseError({"message": "Expected an update list"})
+    for item in records:
+        if not isinstance(item, dict):
+            raise ApiResponseError({"message": "Expected an update object"})
+        if not isinstance(item.get("DeviceName"), str) or not item["DeviceName"]:
+            raise ApiResponseError({"message": "Update has no device name"})
+        if key == "PropertyUpdates" and not isinstance(item.get("PropertyName"), str):
+            raise ApiResponseError({"message": "Update has no property name"})
+        if (
+            key == "ValueUpdates" or item.get("PropertyName") == "Value"
+        ) and "Value" not in item:
+            raise ApiResponseError({"message": "Update has no value"})
+    return records
 
 
 class ApiInstance:
@@ -41,7 +83,7 @@ class ApiInstance:
         self._host = host
         self._session = session
 
-        self._state = []
+        self._state: dict[str, typing.Any] = {}
         self._authorized_headers = None
         self._session_generation = 0
         self._snapshot_generation = -1
@@ -50,7 +92,7 @@ class ApiInstance:
         self._reconnect_lock = asyncio.Lock()
 
     def _set_state_value(self, device_name: str, value: typing.Any) -> None:
-        """Update the internal state of a component."""
+        """Update or discover a component using the same normalized identity."""
         _LOGGER.debug(
             msg="Changing component internal state",
             extra={
@@ -58,9 +100,7 @@ class ApiInstance:
                 "value": value,
             },
         )
-        for item in self._state:
-            if _compare_device_names(item.get("DeviceName"), device_name):
-                item["Value"] = value
+        self._state[_sanitise_device_name(device_name)] = value
 
     async def _request_json(self, path: str, payload: typing.Any = None) -> typing.Any:
         """Make one authenticated request without retrying side effects."""
@@ -75,7 +115,7 @@ class ApiInstance:
                 raise AuthorizationError({"status": response.status})
             if response.status != HTTPStatus.OK:
                 raise HttpStatusNotOkError({"status": response.status})
-            return await response.json()
+            return _validate_result(await response.json())
 
     async def _recover_session(self, failed_generation: int) -> None:
         """Renew one rejected session even when several requests fail together."""
@@ -143,10 +183,7 @@ class ApiInstance:
 
     def get_value(self, device_name: str) -> typing.Any:
         """Get value for device from internal state."""
-        value = None
-        for item in self._state:
-            if _compare_device_names(item.get("DeviceName"), device_name):
-                value = item.get("Value")
+        value = self._state.get(_sanitise_device_name(device_name))
 
         _LOGGER.debug(
             msg="Getting component internal state value.",
@@ -203,6 +240,8 @@ class ApiInstance:
                 )
 
             login_response = await response.json()
+            if not isinstance(login_response, dict):
+                raise ApiResponseError({"message": "Expected a login response object"})
             if login_response.get("Status") != "OK":
                 raise AuthorizationError(
                     {
@@ -227,7 +266,12 @@ class ApiInstance:
     async def initialize_state(self) -> None:
         """Fetch a fresh snapshot for the current authenticated session."""
         data = await self._request_json("GetPanel", {"Path": ""})
-        self._state = data.get("ThemeObject", {}).get("ValueUpdates", [])
+        if not isinstance(data, dict) or not isinstance(data.get("ThemeObject"), dict):
+            raise ApiResponseError({"message": "Snapshot has no theme object"})
+        self._state = {
+            _sanitise_device_name(item["DeviceName"]): item["Value"]
+            for item in _require_updates(data["ThemeObject"], "ValueUpdates")
+        }
         self._snapshot_generation = self._session_generation
         self._snapshot_pending = False
 
@@ -235,7 +279,7 @@ class ApiInstance:
         """Fetch updates, renewing a rejected session before one read retry."""
         path = f"GetClientData?_={int(time.time())}"
         data = await self._authenticated_request(path, retry_read=True)
-        for item in data.get("PropertyUpdates", []):
+        for item in _require_updates(data, "PropertyUpdates"):
             if item.get("PropertyName") == "Value":
                 self._set_state_value(item.get("DeviceName"), item.get("Value"))
 
@@ -266,3 +310,7 @@ class HttpStatusNotOkError(Exception):
 
 class AuthorizationError(Exception):
     """Raised when authorization fails."""
+
+
+class ApiResponseError(Exception):
+    """Raised when the server reports an error or returns malformed data."""
