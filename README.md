@@ -20,9 +20,18 @@ Integrated a wide range of different entities:
 
 ## Configuration
 
-Open **Settings → Devices & services → ComfortClick → Configure** to manage
-the apartment's devices. Saving one form reloads the integration; reopen Configure
-to manage another.
+Open **ComfortClick** in the Home Assistant sidebar to manage the apartment's
+devices. Each edit view has **Back** to discard unsaved changes and return to its
+list, and **Configuration** to return to the main menu. Saving returns to the main
+menu without closing the editor. Changed settings reload the integration.
+
+Air conditioners and fans appear as clickable rows with their names and rooms.
+Select the device to edit, or choose Add or Remove. The page is available to
+Home Assistant administrators at `/comfortclick-config`.
+
+The standard **Settings → Devices & services → ComfortClick → Configure** dialog
+also supports direct device selection and successive saves. Use the sidebar page
+for Back navigation from an edit form; the standard dialog does not offer it.
 
 | Section | Available configuration |
 | --- | --- |
@@ -146,8 +155,8 @@ entries and existing entries without a saved preference. Explicitly saved settin
 are preserved, so an entry with verification enabled keeps it enabled.
 
 To enable verification, use a controller URL whose hostname matches its trusted
-certificate, then open **Settings → Devices & services → ComfortClick → Configure**
-→ **Connection** and enable **Verify SSL certificate**. This setting is also
+certificate, then open **ComfortClick → Connection** and enable
+**Verify SSL certificate**. This setting is also
 available during initial setup. A change to certificate verification alone can be
 saved while the controller is unavailable; Home Assistant reloads the entry after
 the change. No entities need to be deleted.

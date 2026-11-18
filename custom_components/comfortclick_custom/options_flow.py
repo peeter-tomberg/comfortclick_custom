@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import math
+from collections import Counter
 from collections.abc import Mapping
 from copy import deepcopy
+from functools import partial
+from hashlib import sha256
 from typing import Any
 from uuid import uuid4
 
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_VERIFY_SSL
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
@@ -150,9 +154,22 @@ class OptionsFlow(config_entries.OptionsFlow):
         self._index: int | None = None
         self._original_section: Any = None
         self._connection_original: dict[str, Any] | None = None
+        self._mapping_actions: set[str] = set()
+        self._vent: dict[str, Any] = {}
 
     async def async_step_init(self, _user_input: dict | None = None) -> Any:
         """Choose the kind of configuration to manage."""
+        return self._root_menu()
+
+    def _root_menu(self, *, saved: bool = False) -> Any:
+        """Return to configuration after discarding only unsaved draft state."""
+        self._clear_mapping_actions()
+        self._section = ""
+        self._mappings = []
+        self._index = None
+        self._original_section = None
+        self._connection_original = None
+        self._vent = {}
         return self.async_show_menu(
             step_id="init",
             menu_options=[
@@ -163,8 +180,14 @@ class OptionsFlow(config_entries.OptionsFlow):
                 "fans",
                 "doorbell",
                 "connection",
+                "done",
             ],
+            description_placeholders={"saved": "true"} if saved else None,
         )
+
+    async def async_step_done(self, _user_input: dict | None = None) -> Any:
+        """Close the flow without rewriting settings already saved."""
+        return self.async_create_entry(title="", data=None)
 
     async def async_step_connection(self, user_input: dict | None = None) -> Any:
         """Validate changed credentials before atomically saving the connection."""
@@ -197,17 +220,23 @@ class OptionsFlow(config_entries.OptionsFlow):
             )
         if self._current_connection() != self._connection_original:
             return self.async_abort(reason="connection_changed")
+        if (
+            not credentials_changed
+            and candidate[CONF_VERIFY_SSL] == self._connection_original[CONF_VERIFY_SSL]
+        ):
+            return self._root_menu(saved=True)
         options = {**self._entry.options, CONF_VERIFY_SSL: candidate[CONF_VERIFY_SSL]}
         data = {**self._entry.data, **candidate}
         was_loaded = self._entry.state is config_entries.ConfigEntryState.LOADED
+        had_listener = bool(self._entry.update_listeners)
         self.hass.config_entries.async_update_entry(
             self._entry, data=data, options=options
         )
-        if not was_loaded:
+        if not was_loaded and not had_listener:
             self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
         # Both dictionaries were saved together above. Let the existing update
-        # listener reload once; the flow manager must not write options again.
-        return self.async_create_entry(title="", data=None)
+        # listener reload once and keep this flow open for the next operation.
+        return self._root_menu(saved=True)
 
     def _current_connection(self) -> dict[str, Any]:
         """Read only connection fields for concurrent-edit detection."""
@@ -482,24 +511,118 @@ class OptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(step_id="doorbell", data_schema=vol.Schema({}))
 
     async def async_step_mapping(self, _user_input: dict | None = None) -> Any:
-        """List configured names and available operations."""
+        """Show each room device as a directly clickable named row."""
         if self._section not in ("fans", "thermostats"):
             return self.async_abort(reason="fixed_slots")
-        operations = ["add_mapping"]
+        operations = self._mapping_menu_options(remove=False)
+        if operations is None:
+            return self.async_abort(reason="mappings_changed")
+        device = "fan" if self._section == "fans" else "air conditioner"
+        operations["add_mapping"] = f"Add {device}"
         if self._mappings:
-            operations.extend(("edit_mapping", "remove_mapping"))
-        operations.append("init")
+            operations["remove_mapping"] = f"Remove {device}"
+        operations["init"] = "Back"
         return self.async_show_menu(
             step_id="mapping",
             menu_options=operations,
             description_placeholders={
-                "configured": "\n".join(
-                    f"- {item.get('name') or item.get(PRIMARY_PATH[self._section])}"
-                    for item in self._mappings
-                )
-                or "—"
+                "category": "Fans" if self._section == "fans" else "Air conditioners"
             },
         )
+
+    def _clear_mapping_actions(self) -> None:
+        """Remove only this flow's dynamically registered menu handlers."""
+        for step_id in self._mapping_actions:
+            delattr(self, f"async_step_{step_id}")
+        self._mapping_actions.clear()
+
+    def _mapping_area_id(self, mapping: Mapping[str, Any]) -> str | None:
+        """Use configured room or the current entity's legacy room assignment."""
+        area_id = mapping.get("area_id")
+        registry = self.hass.data.get(er.DATA_REGISTRY)
+        if area_id is None and registry:
+            entity_id = registry.async_get_entity_id(
+                "fan" if self._section == "fans" else "climate",
+                DOMAIN,
+                mapping["unique_id"],
+            )
+            if entity_id and (entity := registry.async_get(entity_id)):
+                area_id = entity.area_id
+        return area_id
+
+    def _mapping_label(self, mapping: Mapping[str, Any]) -> str:
+        """Name a room device without exposing its controller path in the list."""
+        name = mapping.get("name") or (
+            "Fan" if self._section == "fans" else "Air conditioner"
+        )
+        area_id = self._mapping_area_id(mapping)
+        areas = self.hass.data.get(ar.DATA_REGISTRY)
+        if area_id and areas and (area := areas.async_get_area(area_id)):
+            return f"{name} — {area.name}"
+        return name
+
+    def _mapping_menu_options(self, *, remove: bool) -> dict[str, str] | None:
+        """Bind opaque, stable menu actions to immutable mapping identities."""
+        self._clear_mapping_actions()
+        identities = [mapping["unique_id"] for mapping in self._mappings]
+        if any(not isinstance(identity, str) for identity in identities) or len(
+            set(identities)
+        ) != len(identities):
+            return None
+        labels = [self._mapping_label(mapping) for mapping in self._mappings]
+        counts = Counter(labels)
+        occurrences: Counter[str] = Counter()
+        options = {}
+        for identity, label in zip(identities, labels, strict=True):
+            digest = sha256(f"{self._section}\0{identity}".encode()).hexdigest()
+            step_id = f"{'remove' if remove else 'edit'}_{digest}"
+            setattr(
+                self,
+                f"async_step_{step_id}",
+                partial(
+                    self._select_mapping_identity,
+                    self._section,
+                    identity,
+                    remove=remove,
+                ),
+            )
+            self._mapping_actions.add(step_id)
+            occurrences[label] += 1
+            options[step_id] = (
+                f"{label} ({occurrences[label]})" if counts[label] > 1 else label
+            )
+        return options
+
+    async def _select_mapping_identity(
+        self,
+        section: str,
+        identity: str,
+        _user_input: dict | None = None,
+        *,
+        remove: bool,
+    ) -> Any:
+        """Resolve a clicked identity against current options and reject stale rows."""
+        if (
+            section != self._section
+            or self._entry.options.get(section) != self._original_section
+        ):
+            return self.async_abort(reason="mappings_changed")
+        try:
+            mappings = _import_mappings(self._entry.options, section)
+        except (TypeError, ValueError):
+            return self.async_abort(reason="mappings_changed")
+        matches = [
+            index
+            for index, mapping in enumerate(mappings)
+            if mapping["unique_id"] == identity
+        ]
+        if len(matches) != 1:
+            return self.async_abort(reason="mappings_changed")
+        self._mappings = mappings
+        self._index = matches[0]
+        if remove:
+            return await self.async_step_confirm_remove()
+        return self._mapping_form()
 
     async def async_step_add_mapping(self, _user_input: dict | None = None) -> Any:
         """Start a new independent mapping."""
@@ -508,54 +631,15 @@ class OptionsFlow(config_entries.OptionsFlow):
         self._index = None
         return self._mapping_form()
 
-    async def _select_mapping(self, step: str, user_input: dict | None) -> Any:
-        """Select a record by position, allowing equal display names."""
+    async def async_step_remove_mapping(self, _user_input: dict | None = None) -> Any:
+        """Select a mapping to stop providing."""
         if self._section not in ("fans", "thermostats"):
             return self.async_abort(reason="fixed_slots")
-        errors = {}
-        if user_input is not None:
-            try:
-                index = int(user_input["mapping"])
-            except (KeyError, TypeError, ValueError):
-                errors["mapping"] = "required"
-            else:
-                if 0 <= index < len(self._mappings):
-                    self._index = index
-                    if step == "remove_mapping":
-                        return await self.async_step_confirm_remove()
-                    return self._mapping_form()
-                errors["mapping"] = "required"
-        return self.async_show_form(
-            step_id=step,
-            data_schema=vol.Schema(
-                {
-                    vol.Required("mapping"): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                {
-                                    "value": str(index),
-                                    "label": (
-                                        f"{item.get('name') or '—'} — "
-                                        f"{item.get(PRIMARY_PATH[self._section], '')}"
-                                    ),
-                                }
-                                for index, item in enumerate(self._mappings)
-                            ],
-                            mode=selector.SelectSelectorMode.DROPDOWN,
-                        )
-                    )
-                }
-            ),
-            errors=errors,
-        )
-
-    async def async_step_edit_mapping(self, user_input: dict | None = None) -> Any:
-        """Select a mapping to edit."""
-        return await self._select_mapping("edit_mapping", user_input)
-
-    async def async_step_remove_mapping(self, user_input: dict | None = None) -> Any:
-        """Select a mapping to stop providing."""
-        return await self._select_mapping("remove_mapping", user_input)
+        operations = self._mapping_menu_options(remove=True)
+        if operations is None:
+            return self.async_abort(reason="mappings_changed")
+        operations["mapping"] = "Back"
+        return self.async_show_menu(step_id="remove_mapping", menu_options=operations)
 
     async def async_step_confirm_remove(self, user_input: dict | None = None) -> Any:
         """Confirm removal without deleting registry entries or history."""
@@ -603,16 +687,8 @@ class OptionsFlow(config_entries.OptionsFlow):
             ): str
         }
         area_id = values.get("area_id")
-        registry = self.hass.data.get(er.DATA_REGISTRY)
-        if area_id is None and registry and self._index is not None:
-            mapping = self._mappings[self._index]
-            entity_id = registry.async_get_entity_id(
-                "fan" if self._section == "fans" else "climate",
-                DOMAIN,
-                mapping["unique_id"],
-            )
-            if entity_id and (entity := registry.async_get(entity_id)):
-                area_id = entity.area_id
+        if area_id is None and self._index is not None:
+            area_id = self._mapping_area_id(self._mappings[self._index])
         schema[vol.Optional("area_id", description={"suggested_value": area_id})] = (
             selector.AreaSelector()
         )
@@ -689,7 +765,11 @@ class OptionsFlow(config_entries.OptionsFlow):
     def _save_options(self, changes: dict[str, Any]) -> Any:
         """Merge unrelated options and reload even after a failed setup."""
         options = {**self._entry.options, **changes}
-        if self._entry.state is not config_entries.ConfigEntryState.LOADED:
-            self.hass.config_entries.async_update_entry(self._entry, options=options)
+        if options == self._entry.options:
+            return self._root_menu(saved=True)
+        was_loaded = self._entry.state is config_entries.ConfigEntryState.LOADED
+        had_listener = bool(self._entry.update_listeners)
+        self.hass.config_entries.async_update_entry(self._entry, options=options)
+        if not was_loaded and not had_listener:
             self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
-        return self.async_create_entry(title="", data=options)
+        return self._root_menu(saved=True)

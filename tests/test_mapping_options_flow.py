@@ -141,6 +141,7 @@ def context() -> FlowContext:
         "vent": deepcopy(VENT),
     }
     entry.state = ConfigEntryState.LOADED
+    entry.update_listeners = []
     api = MagicMock(spec=ApiInstance)
     api.get_device_paths.return_value = CACHED_PATHS
     hass = MagicMock(spec=HomeAssistant)
@@ -150,6 +151,20 @@ def context() -> FlowContext:
         },
     }
     hass.config_entries = MagicMock()
+
+    def update_entry(updated_entry: ConfigEntry, **changes: Any) -> bool:
+        changed = any(
+            getattr(updated_entry, key) != value for key, value in changes.items()
+        )
+        for key, value in changes.items():
+            setattr(
+                updated_entry,
+                key,
+                MappingProxyType(value) if key in ("options", "data") else value,
+            )
+        return changed
+
+    hass.config_entries.async_update_entry.side_effect = update_entry
     flow = config_flow.ConfigFlow.async_get_options_flow(entry)
     flow.hass = hass
     return FlowContext(flow, entry, hass, api)
@@ -163,6 +178,23 @@ async def submit(
     context: FlowContext, section: str, values: dict[str, Any]
 ) -> dict[str, Any]:
     return await getattr(context.flow, f"async_step_{FORM_STEPS[section]}")(values)
+
+
+async def select_mapping(
+    context: FlowContext, index: int = 0, *, remove: bool = False
+) -> dict[str, Any]:
+    menu = await (
+        context.flow.async_step_remove_mapping()
+        if remove
+        else context.flow.async_step_mapping()
+    )
+    prefix = "remove_" if remove else "edit_"
+    actions = [
+        key
+        for key in menu["menu_options"]
+        if key.startswith(prefix) and key != "remove_mapping"
+    ]
+    return await getattr(context.flow, f"async_step_{actions[index]}")()
 
 
 def path_selector(form: dict[str, Any], field: str) -> SelectSelector:
@@ -188,6 +220,7 @@ async def test_init_menu_keeps_connection_and_each_mapping_category(
         "fans",
         "doorbell",
         "connection",
+        "done",
     ]
     assert context.api.mock_calls == []
 
@@ -201,13 +234,13 @@ async def test_category_displays_saved_names_without_persisting(
     result = await open_section(context, section)
 
     assert result["type"] is FlowResultType.MENU
-    assert result["menu_options"] == [
-        "add_mapping",
-        "edit_mapping",
-        "remove_mapping",
-        "init",
-    ]
-    assert MAPPINGS[section]["name"] in result["description_placeholders"]["configured"]
+    assert {"add_mapping", "remove_mapping", "init"} <= result["menu_options"].keys()
+    rows = {
+        key: label
+        for key, label in result["menu_options"].items()
+        if key.startswith("edit_")
+    }
+    assert list(rows.values()) == [MAPPINGS[section]["name"]]
     assert context.entry.options == original_options
     context.hass.config_entries.async_update_entry.assert_not_called()
 
@@ -223,17 +256,17 @@ async def test_empty_list_offers_add_and_creates_new_identity(
     form = await context.flow.async_step_add_mapping()
     result = await submit(context, section, deepcopy(MAPPINGS[section]))
 
-    assert menu["menu_options"] == ["add_mapping", "init"]
+    assert list(menu["menu_options"]) == ["add_mapping", "init"]
     assert form["step_id"] == FORM_STEPS[section]
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    saved = result["data"][section]
+    assert result["type"] is FlowResultType.MENU
+    saved = context.entry.options[section]
     assert len(saved) == 1
     assert saved[0]["unique_id"]
     assert saved[0]["unique_id"] != LEGACY_IDENTITIES[section]
     assert saved[0]["name"] == MAPPINGS[section]["name"]
-    assert result["data"][CONF_VERIFY_SSL] is True
-    assert result["data"]["unrelated"] == {"keep": [1]}
-    assert context.entry.options == original_options
+    assert context.entry.options[CONF_VERIFY_SSL] is True
+    assert context.entry.options["unrelated"] == {"keep": [1]}
+    assert context.entry.options != original_options
     context.hass.config_entries.async_schedule_reload.assert_not_called()
 
 
@@ -249,8 +282,8 @@ async def test_edit_preserves_migrated_or_new_identity_after_path_change(
     original_options = deepcopy(context.entry.options)
     await open_section(context, section)
 
-    selection = await context.flow.async_step_edit_mapping()
-    form = await context.flow.async_step_edit_mapping({"mapping": "0"})
+    selection = await context.flow.async_step_mapping()
+    form = await select_mapping(context)
     edited = {
         **MAPPINGS[section],
         "name": "Renamed",
@@ -258,13 +291,14 @@ async def test_edit_preserves_migrated_or_new_identity_after_path_change(
     }
     result = await submit(context, section, edited)
 
-    assert selection["step_id"] == "edit_mapping"
+    assert result["step_id"] == "init"
+    assert selection["type"] is FlowResultType.MENU
     assert form["step_id"] == FORM_STEPS[section]
-    saved = result["data"][section][0]
+    saved = context.entry.options[section][0]
     assert saved["unique_id"] == (saved_identity or LEGACY_IDENTITIES[section])
     assert saved["name"] == "Renamed"
     assert saved[PRIMARY_PATHS[section]] == "New\\Path"
-    assert context.entry.options == original_options
+    assert context.entry.options != original_options
 
 
 @pytest.mark.parametrize("section", MAPPINGS)
@@ -273,7 +307,7 @@ async def test_removal_requires_confirmation_and_saves_explicit_empty_list(
 ) -> None:
     await open_section(context, section)
     selection = await context.flow.async_step_remove_mapping()
-    confirmation = await context.flow.async_step_remove_mapping({"mapping": "0"})
+    confirmation = await select_mapping(context, remove=True)
     cancelled = await context.flow.async_step_confirm_remove({"confirm": False})
 
     assert selection["step_id"] == "remove_mapping"
@@ -283,28 +317,37 @@ async def test_removal_requires_confirmation_and_saves_explicit_empty_list(
     assert cancelled["type"] is FlowResultType.MENU
     assert len(context.entry.options[section]) == 1
 
-    await context.flow.async_step_remove_mapping({"mapping": "0"})
+    await select_mapping(context, remove=True)
     saved = await context.flow.async_step_confirm_remove({"confirm": True})
-    assert saved["data"][section] == []
-    context.entry.options = saved["data"]
+    assert saved["step_id"] == "init"
+    assert context.entry.options[section] == []
     reopened = await open_section(context, section)
-    assert reopened["menu_options"] == ["add_mapping", "init"]
+    assert list(reopened["menu_options"]) == ["add_mapping", "init"]
 
 
-async def test_duplicate_names_are_selected_by_position(context: FlowContext) -> None:
+async def test_duplicate_names_are_disambiguated_and_select_correct_identity(
+    context: FlowContext,
+) -> None:
     context.entry.options["fans"] = [
         {**FAN, "fan_id": "Fan\\First", "unique_id": "first"},
         {**FAN, "fan_id": "Fan\\Second", "unique_id": "second"},
     ]
     await open_section(context, "fans")
     selection = await context.flow.async_step_remove_mapping()
-    choices = path_selector(selection, "mapping").config["options"]
-    assert [choice["value"] for choice in choices] == ["0", "1"]
+    choices = {
+        key: label
+        for key, label in selection["menu_options"].items()
+        if key.startswith("remove_")
+    }
+    assert len(choices) == 2
+    assert len(set(choices.values())) == 2
+    assert all("Fan\\" not in label for label in choices.values())
 
-    await context.flow.async_step_remove_mapping({"mapping": "1"})
+    await select_mapping(context, 1, remove=True)
     result = await context.flow.async_step_confirm_remove({"confirm": True})
 
-    assert [row["unique_id"] for row in result["data"]["fans"]] == ["first"]
+    assert result["step_id"] == "init"
+    assert [row["unique_id"] for row in context.entry.options["fans"]] == ["first"]
 
 
 @pytest.mark.parametrize("section", MAPPINGS)
@@ -312,7 +355,7 @@ async def test_paths_offer_cached_values_and_allow_manual_missing_paths(
     context: FlowContext, section: str
 ) -> None:
     await open_section(context, section)
-    form = await context.flow.async_step_edit_mapping({"mapping": "0"})
+    form = await select_mapping(context)
     field = PRIMARY_PATHS[section]
     selector = path_selector(form, field)
 
@@ -323,7 +366,8 @@ async def test_paths_offer_cached_values_and_allow_manual_missing_paths(
     result = await submit(
         context, section, {**MAPPINGS[section], field: "Offline\\Manual"}
     )
-    assert result["data"][section][0][field] == "Offline\\Manual"
+    assert result["step_id"] == "init"
+    assert context.entry.options[section][0][field] == "Offline\\Manual"
     assert all(item[0] == "get_device_paths" for item in context.api.mock_calls)
 
 
@@ -334,7 +378,7 @@ async def test_edit_round_trip_preserves_trailing_spaces_in_controller_paths(
     mapping = {**MAPPINGS[section], "target_temperature_id": "Controller\\Setpoint "}
     context.entry.options[section] = [{**mapping, "unique_id": "stable"}]
     await open_section(context, section)
-    form = await context.flow.async_step_edit_mapping({"mapping": "0"})
+    form = await select_mapping(context)
     field = next(
         marker
         for marker in form["data_schema"].schema
@@ -344,8 +388,10 @@ async def test_edit_round_trip_preserves_trailing_spaces_in_controller_paths(
 
     result = await submit(context, section, mapping)
 
+    assert result["step_id"] == "init"
     assert (
-        result["data"][section][0]["target_temperature_id"] == "Controller\\Setpoint "
+        context.entry.options[section][0]["target_temperature_id"]
+        == "Controller\\Setpoint "
     )
 
 
@@ -373,8 +419,11 @@ async def test_distinct_trailing_space_paths_do_not_conflict(
         new_mapping["lock_id"] = "Controller\\Lock "
     result = await submit(context, section, new_mapping)
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][section][1][PRIMARY_PATHS[section]] == "Controller\\Value "
+    assert result["type"] is FlowResultType.MENU
+    assert (
+        context.entry.options[section][1][PRIMARY_PATHS[section]]
+        == "Controller\\Value "
+    )
 
 
 async def test_offline_controller_allows_manual_mapping(context: FlowContext) -> None:
@@ -386,7 +435,8 @@ async def test_offline_controller_allows_manual_mapping(context: FlowContext) ->
     assert path_selector(form, "fan_id").config["options"] == []
     assert path_selector(form, "fan_id")("Fan\\Manual") == "Fan\\Manual"
     result = await context.flow.async_step_fan({**FAN, "fan_id": "Fan\\Manual"})
-    assert result["data"]["fans"][0]["fan_id"] == "Fan\\Manual"
+    assert result["step_id"] == "init"
+    assert context.entry.options["fans"][0]["fan_id"] == "Fan\\Manual"
     assert context.api.mock_calls == []
 
 
@@ -407,9 +457,9 @@ async def test_duplicate_paths_reject_add_but_allow_unchanged_edit(
     assert rejected["errors"][field] == "duplicate_path"
     assert len(context.entry.options[section]) == 1
 
-    await context.flow.async_step_edit_mapping({"mapping": "0"})
+    await select_mapping(context)
     accepted = await submit(context, section, deepcopy(MAPPINGS[section]))
-    assert accepted["type"] is FlowResultType.CREATE_ENTRY
+    assert accepted["type"] is FlowResultType.MENU
 
 
 @pytest.mark.parametrize(
@@ -456,13 +506,14 @@ async def test_heating_only_thermostat_clears_optional_fan(
     context: FlowContext, fan_value: str | None
 ) -> None:
     await open_section(context, "thermostats")
-    await context.flow.async_step_edit_mapping({"mapping": "0"})
+    await select_mapping(context)
 
     result = await context.flow.async_step_thermostat(
         {**THERMOSTAT, "fan_id": fan_value}
     )
 
-    assert result["data"]["thermostats"][0]["fan_id"] is None
+    assert result["step_id"] == "init"
+    assert context.entry.options["thermostats"][0]["fan_id"] is None
 
 
 @pytest.mark.parametrize(
@@ -535,16 +586,16 @@ async def test_fixed_meter_edit_preserves_all_five_roles_and_saved_identity(
         {"id": "New\\Meter", "unit": "default"}
     )
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    rows = {item["slot"]: item for item in result["data"]["utilities"]}
+    assert result["type"] is FlowResultType.MENU
+    rows = {item["slot"]: item for item in context.entry.options["utilities"]}
     assert set(rows) == set(METERS)
     for key, meter in METERS.items():
         assert rows[key]["type"] == meter["type"]
         assert rows[key]["id"] == ("New\\Meter" if key == slot else meter["id"])
         expected_identity = f"saved-{key}" if source == "options" else meter["id"]
         assert rows[key]["unique_id"] == expected_identity
-    assert dict(context.entry.options) == original_options
-    assert result["data"][CONF_VERIFY_SSL] is True
+    assert dict(context.entry.options) != original_options
+    assert context.entry.options[CONF_VERIFY_SSL] is True
     assert all(item[0] == "get_device_paths" for item in context.api.mock_calls)
 
 
@@ -560,9 +611,11 @@ async def test_fixed_meter_units_can_be_overridden_and_reset(
     result = await context.flow.async_step_utility(
         {"id": METERS[slot]["id"], "unit": unit}
     )
-    saved = next(row for row in result["data"]["utilities"] if row["slot"] == slot)
+    assert result["step_id"] == "init"
+    saved = next(
+        row for row in context.entry.options["utilities"] if row["slot"] == slot
+    )
     assert saved["unit"] == unit
-    context.entry.options = result["data"]
 
     await context.flow.async_step_utilities()
     await getattr(context.flow, f"async_step_meter_{slot}")()
@@ -570,7 +623,10 @@ async def test_fixed_meter_units_can_be_overridden_and_reset(
         {"id": METERS[slot]["id"], "unit": "default"}
     )
 
-    saved = next(row for row in reset["data"]["utilities"] if row["slot"] == slot)
+    assert reset["step_id"] == "init"
+    saved = next(
+        row for row in context.entry.options["utilities"] if row["slot"] == slot
+    )
     assert "unit" not in saved
 
 
@@ -615,13 +671,14 @@ async def test_fixed_door_edit_preserves_three_slots_and_existing_identity(
     assert {marker.schema for marker in form["data_schema"].schema} == {"door_id"}
     result = await context.flow.async_step_door({"door_id": "New\\Door"})
 
-    rows = {item["slot"]: item for item in result["data"]["locks"]}
+    assert result["step_id"] == "init"
+    rows = {item["slot"]: item for item in context.entry.options["locks"]}
     assert set(rows) == set(DOORS)
     for key, door in DOORS.items():
         assert rows[key]["door_id"] == ("New\\Door" if key == slot else door["door_id"])
         expected_identity = f"saved-{key}" if source == "options" else door["door_id"]
         assert rows[key]["unique_id"] == expected_identity
-    assert dict(context.entry.options) == original_options
+    assert dict(context.entry.options) != original_options
     assert all(item[0] == "get_device_paths" for item in context.api.mock_calls)
 
 
@@ -659,9 +716,9 @@ async def test_fixed_slot_can_clear_mapping_without_removing_slot(
 
     result = await getattr(context.flow, f"async_step_{form_step}")({field: ""})
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert len(result["data"][section]) == (5 if section == "utilities" else 3)
-    assert any(not row[field] for row in result["data"][section])
+    assert result["type"] is FlowResultType.MENU
+    assert len(context.entry.options[section]) == (5 if section == "utilities" else 3)
+    assert any(not row[field] for row in context.entry.options[section])
     assert context.api.mock_calls == []
 
 
@@ -681,8 +738,9 @@ async def test_single_ventilation_preserves_other_controls_when_editing_one_grou
     changes = {field: f"New\\{field}" for field in VENT_GROUPS[group]}
     result = await getattr(context.flow, f"async_step_{group}")(changes)
 
-    assert result["data"]["vent"] == {**VENT, **changes}
-    assert context.entry.options == original_options
+    assert result["step_id"] == "init"
+    assert context.entry.options["vent"] == {**VENT, **changes}
+    assert context.entry.options != original_options
     assert all(item[0] == "get_device_paths" for item in context.api.mock_calls)
 
 
@@ -735,8 +793,9 @@ async def test_saving_keeps_changes_to_other_categories(context: FlowContext) ->
 
     result = await context.flow.async_step_thermostat(THERMOSTAT)
 
-    assert result["data"]["fans"] == context.entry.options["fans"]
-    assert len(result["data"]["thermostats"]) == 1
+    assert result["step_id"] == "init"
+    assert context.entry.options["fans"] == [{**FAN, "unique_id": "other-flow-save"}]
+    assert len(context.entry.options["thermostats"]) == 1
 
 
 async def test_failed_entry_saves_mapping_before_scheduling_reload(
@@ -749,10 +808,41 @@ async def test_failed_entry_saves_mapping_before_scheduling_reload(
 
     result = await context.flow.async_step_fan(FAN)
 
+    assert result["step_id"] == "init"
     assert context.hass.config_entries.mock_calls == [
-        call.async_update_entry(context.entry, options=result["data"]),
+        call.async_update_entry(context.entry, options=context.entry.options),
         call.async_schedule_reload(context.entry.entry_id),
     ]
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        ConfigEntryState.LOADED,
+        ConfigEntryState.SETUP_RETRY,
+        ConfigEntryState.NOT_LOADED,
+    ],
+)
+@pytest.mark.parametrize("section", ["fans", "connection"])
+async def test_unchanged_save_never_writes_or_reloads_any_entry_state(
+    context: FlowContext, state: ConfigEntryState, section: str
+) -> None:
+    context.entry.state = state
+    context.entry.options["fans"] = [{**FAN, "unique_id": "stable", "area_id": ""}]
+    before_options = deepcopy(context.entry.options)
+    before_data = deepcopy(context.entry.data)
+    if section == "fans":
+        await context.flow.async_step_fans()
+        await select_mapping(context)
+        result = await context.flow.async_step_fan(FAN)
+    else:
+        await context.flow.async_step_connection()
+        result = await context.flow.async_step_connection({CONF_VERIFY_SSL: True})
+    assert result["step_id"] == "init"
+    assert context.entry.options == before_options
+    assert context.entry.data == before_data
+    context.hass.config_entries.async_update_entry.assert_not_called()
+    context.hass.config_entries.async_schedule_reload.assert_not_called()
 
 
 @pytest.mark.parametrize("section", MAPPINGS)
@@ -765,12 +855,13 @@ async def test_read_only_options_mapping_is_supported(
     }
     context.entry.options = MappingProxyType(original_options)
     await open_section(context, section)
-    await context.flow.async_step_edit_mapping({"mapping": "0"})
+    await select_mapping(context)
 
     result = await submit(context, section, {**MAPPINGS[section], "name": "New name"})
 
-    assert result["data"][section][0]["name"] == "New name"
-    assert result["data"][section][0]["unique_id"] == "stable"
+    assert result["step_id"] == "init"
+    assert context.entry.options[section][0]["name"] == "New name"
+    assert context.entry.options[section][0]["unique_id"] == "stable"
     assert original_options[section][0]["name"] == MAPPINGS[section]["name"]
 
 
@@ -782,7 +873,7 @@ async def test_edit_can_explicitly_clear_a_room_assignment(
         {**MAPPINGS[section], "unique_id": "stable", "area_id": "old-room"}
     ]
     await open_section(context, section)
-    form = await context.flow.async_step_edit_mapping({"mapping": "0"})
+    form = await select_mapping(context)
     area_field = next(
         marker for marker in form["data_schema"].schema if marker.schema == "area_id"
     )
@@ -790,9 +881,9 @@ async def test_edit_can_explicitly_clear_a_room_assignment(
 
     result = await submit(context, section, deepcopy(MAPPINGS[section]))
 
-    assert result["data"][section][0]["area_id"] == ""
-    assert result["data"][section][0]["unique_id"] == "stable"
-    assert context.entry.options[section][0]["area_id"] == "old-room"
+    assert result["step_id"] == "init"
+    assert context.entry.options[section][0]["area_id"] == ""
+    assert context.entry.options[section][0]["unique_id"] == "stable"
 
 
 @pytest.fixture
@@ -840,7 +931,7 @@ async def test_imported_mapping_prefills_existing_entity_registry_room(
     ]
     await open_section(context, section)
 
-    form = await context.flow.async_step_edit_mapping({"mapping": "0"})
+    form = await select_mapping(context)
 
     area_field = next(
         marker for marker in form["data_schema"].schema if marker.schema == "area_id"
@@ -882,8 +973,10 @@ async def test_real_flow_manager_validates_persists_and_reloads_once(
         )
         await managed_hass.async_block_till_done()
 
-        assert result["type"] is FlowResultType.CREATE_ENTRY
-        assert result["result"] is True
+        assert result["type"] is FlowResultType.MENU
+        assert result["step_id"] == "init"
+        assert result["flow_id"] == flow_id
+        assert any(item["flow_id"] == flow_id for item in manager.async_progress())
         assert isinstance(entry.options, MappingProxyType)
         assert len(entry.options[section]) == 1
         assert entry.options[section][0]["name"] == MAPPINGS[section]["name"]
@@ -895,6 +988,225 @@ async def test_real_flow_manager_validates_persists_and_reloads_once(
         )
     finally:
         remove_listener()
+
+
+def named_mapping(section: str, name: str) -> dict[str, Any]:
+    mapping = {**MAPPINGS[section], "name": name, "unique_id": f"stable-{name}"}
+    for key in MAPPINGS[section]:
+        if key.endswith("_id"):
+            mapping[key] = f"{name}\\{key}"
+    return mapping
+
+
+def input_for_form(form: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key.schema: values[key.schema]
+        for key in form["data_schema"].schema
+        if key.schema in values
+    }
+
+
+def named_action(menu: dict[str, Any], name: str) -> str:
+    return next(key for key, label in menu["menu_options"].items() if label == name)
+
+
+@pytest.fixture
+async def managed_entry(managed_hass: HomeAssistant) -> AsyncGenerator[ConfigEntry]:
+    entry = ConfigEntry(
+        data=CONNECTION.copy(),
+        discovery_keys=MappingProxyType({}),
+        domain=DOMAIN,
+        minor_version=1,
+        options={
+            **deepcopy(EMPTY_MAPPINGS),
+            **{
+                section: [
+                    named_mapping(section, "First"),
+                    named_mapping(section, "Second"),
+                ]
+                for section in MAPPINGS
+            },
+        },
+        source=config_entries.SOURCE_USER,
+        state=ConfigEntryState.LOADED,
+        title="Test controller",
+        unique_id="multiple-operations",
+        version=2,
+    )
+    await managed_hass.config_entries.async_add(entry)
+    remove = entry.add_update_listener(integration._async_update_listener)  # noqa: SLF001
+    try:
+        yield entry
+    finally:
+        remove()
+
+
+@pytest.mark.parametrize("section", MAPPINGS)
+async def test_repeated_named_edits_and_done_use_one_active_flow(
+    managed_hass: HomeAssistant, managed_entry: ConfigEntry, section: str
+) -> None:
+    manager = managed_hass.config_entries.options
+    root = await manager.async_init(managed_entry.entry_id)
+    flow_id = root["flow_id"]
+    for name in ("Second", "First"):
+        menu = await manager.async_configure(flow_id, {"next_step_id": section})
+        form = await manager.async_configure(
+            flow_id, {"next_step_id": named_action(menu, name)}
+        )
+        values = {**named_mapping(section, name), "name": f"{name} revised"}
+        root = await manager.async_configure(flow_id, input_for_form(form, values))
+        assert root["type"] is FlowResultType.MENU
+        assert root["flow_id"] == flow_id
+        assert root["step_id"] == "init"
+    await managed_hass.async_block_till_done()
+    assert [row["name"] for row in managed_entry.options[section]] == [
+        "First revised",
+        "Second revised",
+    ]
+    assert [row["unique_id"] for row in managed_entry.options[section]] == [
+        "stable-First",
+        "stable-Second",
+    ]
+    assert managed_hass.config_entries.async_reload.await_count == 2
+
+    menu = await manager.async_configure(flow_id, {"next_step_id": section})
+    form = await manager.async_configure(
+        flow_id, {"next_step_id": named_action(menu, "Second revised")}
+    )
+    await manager.async_configure(
+        flow_id, input_for_form(form, managed_entry.options[section][1])
+    )
+    await managed_hass.async_block_till_done()
+    assert managed_hass.config_entries.async_reload.await_count == 2
+    done = await manager.async_configure(flow_id, {"next_step_id": "done"})
+    assert done["type"] is FlowResultType.CREATE_ENTRY
+    assert done["data"] is None
+    assert all(item["flow_id"] != flow_id for item in manager.async_progress())
+    await managed_hass.async_block_till_done()
+    assert managed_hass.config_entries.async_reload.await_count == 2
+
+
+@pytest.mark.parametrize("section", MAPPINGS)
+async def test_remove_then_edit_keeps_stable_row_action_after_index_shift(
+    managed_hass: HomeAssistant, managed_entry: ConfigEntry, section: str
+) -> None:
+    manager = managed_hass.config_entries.options
+    root = await manager.async_init(managed_entry.entry_id)
+    flow_id = root["flow_id"]
+    menu = await manager.async_configure(flow_id, {"next_step_id": section})
+    second_action = named_action(menu, "Second")
+    remove_menu = await manager.async_configure(
+        flow_id, {"next_step_id": "remove_mapping"}
+    )
+    await manager.async_configure(
+        flow_id, {"next_step_id": named_action(remove_menu, "First")}
+    )
+    root = await manager.async_configure(flow_id, {"confirm": True})
+    assert root["step_id"] == "init"
+    menu = await manager.async_configure(flow_id, {"next_step_id": section})
+    assert named_action(menu, "Second") == second_action
+    form = await manager.async_configure(flow_id, {"next_step_id": second_action})
+    await manager.async_configure(
+        flow_id,
+        input_for_form(
+            form,
+            {
+                **named_mapping(section, "Second"),
+                "name": "Only remaining device",
+            },
+        ),
+    )
+    await managed_hass.async_block_till_done()
+    assert len(managed_entry.options[section]) == 1
+    assert managed_entry.options[section][0]["unique_id"] == "stable-Second"
+    assert managed_entry.options[section][0]["name"] == "Only remaining device"
+    assert managed_hass.config_entries.async_reload.await_count == 2
+    manager.async_abort(flow_id)
+    assert managed_entry.options[section][0]["name"] == "Only remaining device"
+
+
+@pytest.mark.parametrize("section", MAPPINGS)
+async def test_add_then_edit_new_device_preserves_generated_identity(
+    managed_hass: HomeAssistant, managed_entry: ConfigEntry, section: str
+) -> None:
+    manager = managed_hass.config_entries.options
+    root = await manager.async_init(managed_entry.entry_id)
+    flow_id = root["flow_id"]
+    await manager.async_configure(flow_id, {"next_step_id": section})
+    form = await manager.async_configure(flow_id, {"next_step_id": "add_mapping"})
+    values = named_mapping(section, "Third")
+    await manager.async_configure(flow_id, input_for_form(form, values))
+    identity = managed_entry.options[section][-1]["unique_id"]
+    assert identity != values["unique_id"]
+    menu = await manager.async_configure(flow_id, {"next_step_id": section})
+    form = await manager.async_configure(
+        flow_id, {"next_step_id": named_action(menu, "Third")}
+    )
+    await manager.async_configure(
+        flow_id, input_for_form(form, {**values, "name": "Third revised"})
+    )
+    assert len(managed_entry.options[section]) == 3
+    assert managed_entry.options[section][-1]["unique_id"] == identity
+    assert managed_entry.options[section][-1]["name"] == "Third revised"
+
+
+@pytest.mark.parametrize("section", MAPPINGS)
+async def test_named_rows_show_rooms_and_cannot_collide_with_navigation_labels(
+    context: FlowContext, managed_hass: HomeAssistant, section: str
+) -> None:
+    room = area_registry.async_get(managed_hass).async_create("Bedroom")
+    context.flow.hass = managed_hass
+    context.entry.options[section] = [
+        {**named_mapping(section, "First"), "name": "Back", "area_id": room.id},
+        {**named_mapping(section, "Second"), "name": "Back", "area_id": room.id},
+    ]
+    menu = await open_section(context, section)
+    rows = {
+        key: label
+        for key, label in menu["menu_options"].items()
+        if key.startswith("edit_")
+    }
+    assert list(rows.values()) == ["Back — Bedroom (1)", "Back — Bedroom (2)"]
+    assert menu["menu_options"]["init"] == "Back"
+    form = await getattr(context.flow, f"async_step_{list(rows)[1]}")()
+    field = next(
+        key
+        for key in form["data_schema"].schema
+        if key.schema == PRIMARY_PATHS[section]
+    )
+    assert field.description["suggested_value"].startswith("Second\\")
+
+
+@pytest.mark.parametrize("section", MAPPINGS)
+async def test_stale_named_selection_never_edits_different_device(
+    managed_hass: HomeAssistant, managed_entry: ConfigEntry, section: str
+) -> None:
+    manager = managed_hass.config_entries.options
+    root = await manager.async_init(managed_entry.entry_id)
+    menu = await manager.async_configure(root["flow_id"], {"next_step_id": section})
+    action = named_action(menu, "Second")
+    changed = list(reversed(managed_entry.options[section]))
+    managed_hass.config_entries.async_update_entry(
+        managed_entry, options={**managed_entry.options, section: changed}
+    )
+    rejected = await manager.async_configure(root["flow_id"], {"next_step_id": action})
+    assert rejected["type"] is FlowResultType.ABORT
+    assert rejected["reason"] == "mappings_changed"
+    assert managed_entry.options[section] == changed
+
+
+async def test_cancel_unsaved_add_does_not_validate_or_persist(
+    managed_hass: HomeAssistant, managed_entry: ConfigEntry
+) -> None:
+    before = deepcopy(dict(managed_entry.options))
+    manager = managed_hass.config_entries.options
+    root = await manager.async_init(managed_entry.entry_id)
+    await manager.async_configure(root["flow_id"], {"next_step_id": "fans"})
+    await manager.async_configure(root["flow_id"], {"next_step_id": "add_mapping"})
+    manager.async_abort(root["flow_id"])
+    await managed_hass.async_block_till_done()
+    assert dict(managed_entry.options) == before
+    managed_hass.config_entries.async_reload.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
@@ -955,7 +1267,7 @@ async def test_real_flow_manager_saves_fixed_catalog_and_single_ventilation(
         result = await manager.async_configure(flow_id, values)
         await managed_hass.async_block_till_done()
 
-        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["type"] is FlowResultType.MENU
         assert isinstance(entry.options, MappingProxyType)
         if options_key == "vent":
             for field, value in values.items():
@@ -1009,7 +1321,7 @@ async def test_real_flow_manager_returns_from_doorbell_info_and_saves_connection
         },
     )
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.MENU
     assert dict(entry.options) == {**EMPTY_MAPPINGS, CONF_VERIFY_SSL: False}
 
 
@@ -1038,7 +1350,10 @@ async def test_fixed_form_uses_slot_label_for_empty_legacy_name(
     result = await getattr(context.flow, f"async_step_{form_step}")(
         {path_key: row[path_key]}
     )
-    saved = next(item for item in result["data"][section] if item["slot"] == slot)
+    assert result["step_id"] == "init"
+    saved = next(
+        item for item in context.entry.options[section] if item["slot"] == slot
+    )
     assert saved[name_key] == name
     assert saved[path_key] == row[path_key]
     assert saved["unique_id"] == row[path_key]

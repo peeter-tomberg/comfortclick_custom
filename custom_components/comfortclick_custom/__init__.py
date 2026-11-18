@@ -20,6 +20,7 @@ from .api import ApiInstance
 from .const import DOMAIN
 from .coordinator import ComfortClickCoordinator
 from .migration import CONFIG_ENTRY_VERSION, async_import_mapping_options
+from .panel import async_register_configuration_panel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.typing import ConfigType
 
 # List of platforms to support. There should be a matching .py file for each,
 # eg <cover.py> and <sensor.py>
@@ -48,6 +50,12 @@ class RuntimeData:
 
     coordinator: ComfortClickCoordinator
     cancel_update_listener: Callable
+
+
+async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
+    """Make configuration available even while a controller is offline."""
+    await async_register_configuration_panel(hass)
+    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

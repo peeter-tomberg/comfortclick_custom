@@ -156,8 +156,13 @@ async def test_changed_connection_validates_and_saves_once_without_losing_mappin
     )
     await hass.async_block_till_done()
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] is None
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "init"
+    assert result["flow_id"] == form["flow_id"]
+    assert any(
+        item["flow_id"] == form["flow_id"]
+        for item in hass.config_entries.options.async_progress()
+    )
     assert entry.data[CONF_HOST] == "http://other-controller.test/base"
     assert entry.data[CONF_USERNAME] == "new-user"
     assert entry.data[CONF_PASSWORD] == (replacement or SETTINGS[CONF_PASSWORD])
@@ -182,13 +187,51 @@ async def test_offline_tls_only_change_skips_login_and_unchanged_save_skips_relo
     hass.config_entries.async_reload.assert_awaited_once_with(entry.entry_id)
     hass.config_entries.async_reload.reset_mock()
 
-    form = await open_connection(hass, entry)
+    form = await hass.config_entries.options.async_configure(
+        form["flow_id"], {"next_step_id": "connection"}
+    )
     await hass.config_entries.options.async_configure(
         form["flow_id"], {CONF_VERIFY_SSL: True}
     )
     await hass.async_block_till_done()
     validate.assert_not_awaited()
     hass.config_entries.async_reload.assert_not_awaited()
+
+
+async def test_connection_can_be_changed_twice_and_closed_without_extra_save(
+    hass: HomeAssistant, entry: ConfigEntry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    validate = AsyncMock(return_value={"title": "Controller"})
+    monkeypatch.setattr(options_flow, "validate_input", validate)
+    manager = hass.config_entries.options
+    form = await open_connection(hass, entry)
+    flow_id = form["flow_id"]
+    await manager.async_configure(
+        flow_id,
+        {
+            CONF_USERNAME: "first-user",
+            CONF_PASSWORD: "replacement-password",
+        },
+    )
+    form = await manager.async_configure(flow_id, {"next_step_id": "connection"})
+    assert_empty_password(form)
+    assert "replacement-password" not in repr(form)
+    assert form["data_schema"]({})[CONF_USERNAME] == "first-user"
+    result = await manager.async_configure(
+        flow_id, {CONF_USERNAME: "second-user", CONF_PASSWORD: ""}
+    )
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.MENU
+    assert result["flow_id"] == flow_id
+    assert entry.data[CONF_USERNAME] == "second-user"
+    assert entry.data[CONF_PASSWORD] == "replacement-password"
+    assert validate.await_count == 2
+    assert hass.config_entries.async_reload.await_count == 2
+    done = await manager.async_configure(flow_id, {"next_step_id": "done"})
+    assert done["type"] is FlowResultType.CREATE_ENTRY
+    assert done["data"] is None
+    await hass.async_block_till_done()
+    assert hass.config_entries.async_reload.await_count == 2
 
 
 @pytest.mark.parametrize(
@@ -250,7 +293,7 @@ async def test_concurrent_connection_changes_abort_and_mapping_changes_are_retai
     result = await hass.config_entries.options.async_configure(
         form["flow_id"], {CONF_USERNAME: "changed-user"}
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.MENU
     assert entry.options["fans"] == [{"unique_id": "new-fan"}]
     assert entry.data[CONF_USERNAME] == "changed-user"
 

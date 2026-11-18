@@ -1,6 +1,6 @@
 # Mapping configuration
 
-The native Home Assistant options flow separates the apartment's fixed equipment
+The Home Assistant options flow separates the apartment's fixed equipment
 from repeatable room devices. It uses cached controller paths and supports manual
 entry while the controller is unavailable. Configuring a mapping does not issue
 device commands or open additional controller connections.
@@ -83,13 +83,32 @@ cleared; their old entity registry entries and historical statistics are not
 automatically purged. The doorbell information page returns to the main menu
 without changing configuration.
 
-Saving one operation finishes the flow and reloads the integration through its
-existing update listener. For an entry whose setup failed, options are saved
-before scheduling a retry. Concurrent edits to the same category are rejected;
-changes to other categories are retained.
+Saving an operation persists it once, clears the draft, and returns to the main
+menu in the same options flow. Done closes the flow without another write.
+Changed settings reload the integration through its existing update listener.
+For an entry whose setup failed, options are saved before scheduling a retry.
+Concurrent edits to the same category are rejected; changes to other categories
+are retained. Repeatable device menus bind deterministic opaque action IDs to
+immutable mapping IDs rather than list positions. Labels show names and rooms.
+
+The admin-only ComfortClick sidebar page uses the existing options-flow REST
+endpoints for all validation and persistence. It adds Back navigation that the
+native form dialog does not provide. Back aborts the current flow, creates a new
+one, and replays only checked menu choices to reach the parent list. Form inputs
+are never replayed, so Back discards unsaved changes without issuing a command or
+rewriting settings. The Configuration shortcut returns directly to the root.
+Only the JavaScript editor and public strings JSON are served as static assets;
+the page has no separate credentials or mapping storage.
 
 Tests cover native options-flow manager routing, read-only options mappings,
 persistence and reloads, atomic legacy migration, stable identities, optional and
 offline paths, trailing-space identifiers, room assignment, credential masking,
 connection validation, removal, and runtime loading without YAML. They use the
 repository's real Home Assistant test runtime.
+
+The dependency-free browser regressions live in
+`tests/frontend/configuration.test.html`. Serve the repository root with
+`python -m http.server 8765`, open that page on localhost, and check its visible
+pass/fail list. They exercise invalid-draft Back navigation, removal-menu history,
+typed values and exact paths, password masking, and administrator access using
+mocked Home Assistant calls; no controller or credentials are required.

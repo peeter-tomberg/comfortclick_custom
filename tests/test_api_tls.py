@@ -153,6 +153,7 @@ async def test_options_can_enable_verification_without_connecting() -> None:
     }
     entry.options = {"unrelated": "preserve"}
     entry.state = ConfigEntryState.LOADED
+    entry.update_listeners = []
     flow = config_flow.ConfigFlow.async_get_options_flow(entry)
     flow.hass = MagicMock(spec=HomeAssistant)
     flow.hass.config_entries = MagicMock()
@@ -161,7 +162,8 @@ async def test_options_can_enable_verification_without_connecting() -> None:
 
     result = await flow.async_step_connection({CONF_VERIFY_SSL: True})
 
-    assert result["data"] is None
+    assert result["type"] == "menu"
+    assert result["step_id"] == "init"
     assert flow.hass.config_entries.async_update_entry.call_args.kwargs["options"] == {
         "unrelated": "preserve",
         CONF_VERIFY_SSL: True,
@@ -197,13 +199,15 @@ async def test_failed_setup_is_reloaded_after_saving_certificate_exception() -> 
     }
     entry.options = {CONF_VERIFY_SSL: True}
     entry.state = ConfigEntryState.SETUP_RETRY
+    entry.update_listeners = []
     flow = config_flow.ConfigFlow.async_get_options_flow(entry)
     flow.hass = MagicMock(spec=HomeAssistant)
     flow.hass.config_entries = MagicMock()
 
     result = await flow.async_step_connection({CONF_VERIFY_SSL: False})
 
-    assert result["data"] is None
+    assert result["type"] == "menu"
+    assert result["step_id"] == "init"
     assert flow.hass.config_entries.mock_calls == [
         call.async_update_entry(
             entry,
