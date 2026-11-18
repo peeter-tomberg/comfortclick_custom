@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 # eg <cover.py> and <sensor.py>
 PLATFORMS = [
     Platform.CLIMATE,
+    Platform.EVENT,
     Platform.LOCK,
     Platform.FAN,
     Platform.SENSOR,

@@ -3,8 +3,12 @@
 import asyncio
 import json
 import logging
+import re
 import time
 import typing
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime
 from http import HTTPStatus
 
 import aiohttp
@@ -13,6 +17,49 @@ _LOGGER = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30, connect=10, sock_read=25)
 SESSION_RECOVERY_COOLDOWN = 30
+DOORBELL_SOUND = "DoorBell2.mp3"
+DOORBELL_HISTORY_SIZE = 128
+
+
+@dataclass(frozen=True, slots=True)
+class DoorbellRing:
+    """A confirmed doorbell sound action received in a live poll."""
+
+    sound: str
+    timestamp: str | None
+
+
+def _parse_doorbell_ring(record: typing.Any) -> DoorbellRing | None:
+    """Accept only the observed doorbell action and a safe optional timestamp."""
+    if not isinstance(record, dict):
+        return None
+    action = record.get("Action")
+    if (
+        not isinstance(action, dict)
+        or action.get("ActionName") != "PlaySound"
+        or action.get("Sound") != DOORBELL_SOUND
+    ):
+        return None
+    timestamp = record.get("Time")
+    if timestamp is not None:
+        if (
+            not isinstance(timestamp, str)
+            or re.fullmatch(
+                r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})",
+                timestamp,
+                flags=re.ASCII,
+            )
+            is None
+        ):
+            return None
+        try:
+            parsed = datetime.fromisoformat(timestamp)
+        except ValueError:
+            return None
+        if parsed.utcoffset() is None:
+            return None
+    # Preserve the controller's seven-digit fractional precision for identity.
+    return DoorbellRing(sound=DOORBELL_SOUND, timestamp=timestamp)
 
 
 # Since keys contain \\ and python handles strings differently
@@ -93,6 +140,9 @@ class ApiInstance:
         self._snapshot_pending = False
         self._next_reconnect = 0.0
         self._reconnect_lock = asyncio.Lock()
+        self._seen_doorbell_rings: deque[tuple[str, str]] = deque(
+            maxlen=DOORBELL_HISTORY_SIZE
+        )
 
     def _set_state_value(self, device_name: str, value: typing.Any) -> None:
         """Update or discover a component using the same normalized identity."""
@@ -289,13 +339,34 @@ class ApiInstance:
         self._snapshot_generation = self._session_generation
         self._snapshot_pending = False
 
-    async def poll(self) -> None:
-        """Fetch updates, renewing a rejected session before one read retry."""
+    async def poll(self) -> tuple[DoorbellRing, ...]:
+        """Apply state updates and return distinct doorbell rings from this poll."""
         path = f"GetClientData?_={int(time.time())}"
         data = await self._authenticated_request(path, retry_read=True)
         for item in _require_updates(data, "PropertyUpdates"):
             if item.get("PropertyName") == "Value":
                 self._set_state_value(item.get("DeviceName"), item.get("Value"))
+        actions = data.get("ActionData", [])
+        if not isinstance(actions, list):
+            return ()
+        rings = []
+        # Cache eviction during a large batch must not forget its known records.
+        previously_seen = set(self._seen_doorbell_rings)
+        batch_seen: set[tuple[str, str]] = set()
+        for record in actions:
+            ring = _parse_doorbell_ring(record)
+            if ring is None:
+                continue
+            if ring.timestamp is not None:
+                identity = (ring.timestamp, ring.sound)
+                if identity in batch_seen:
+                    continue
+                batch_seen.add(identity)
+                if identity in previously_seen:
+                    continue
+                self._seen_doorbell_rings.append(identity)
+            rings.append(ring)
+        return tuple(rings)
 
     async def disconnect(self) -> None:
         """Release the server session without closing Home Assistant's HTTP client."""
