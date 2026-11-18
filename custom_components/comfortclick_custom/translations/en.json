@@ -141,12 +141,7 @@
     },
     "meter_unit": {
       "options": {
-        "default": "Default for meter type",
-        "m³": "m³",
-        "L": "L",
-        "Wh": "Wh",
-        "kWh": "kWh",
-        "MWh": "MWh"
+        "default": "Default for meter type"
       }
     }
   }
