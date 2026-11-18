@@ -7,13 +7,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .api import ApiInstance
+from .api import ApiInstance, DoorbellRing
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class ComfortClickCoordinator(DataUpdateCoordinator):
+class ComfortClickCoordinator(DataUpdateCoordinator[tuple[DoorbellRing, ...]]):
     """Coordinator object that has subscribers who ask it for latest data."""
 
     def __init__(
@@ -50,10 +50,10 @@ class ComfortClickCoordinator(DataUpdateCoordinator):
         await self.api.initialize_state()
         _LOGGER.info("Connected and fetched initial state")
 
-    async def async_update_data(self) -> None:
-        """Update data every 1 second."""
+    async def async_update_data(self) -> tuple[DoorbellRing, ...]:
+        """Update cached values and return only this poll's doorbell rings."""
         _LOGGER.debug("Polling API for latest state")
-        await self.api.poll()
+        return await self.api.poll()
 
     async def async_shutdown(self) -> None:
         """Stop scheduled refreshes before releasing the server session."""
