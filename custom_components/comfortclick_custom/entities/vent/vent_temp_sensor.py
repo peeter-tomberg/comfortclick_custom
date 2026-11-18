@@ -67,7 +67,6 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
         ):
             self._mode = VentPresetModes.HOME
             self._attr_native_value = home_vent_temperature
-            self.async_write_ha_state()
             return True
         return False
 
@@ -82,7 +81,6 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
         ):
             self._mode = VentPresetModes.AWAY
             self._attr_native_value = away_vent_temperature
-            self.async_write_ha_state()
             return True
         return False
 
@@ -97,16 +95,12 @@ class VentTemperatureSensor(CoordinatorEntity, SensorEntity):
         ):
             self._mode = VentPresetModes.GUESTS
             self._attr_native_value = guest_vent_temperature
-            self.async_write_ha_state()
             return True
         return False
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        if self._check_home_mode():
-            return
-        if self._check_away_mode():
-            return
-        if self._check_guest_mode():
-            return
+        if not self._check_home_mode() and not self._check_away_mode():
+            self._check_guest_mode()
+        super()._handle_coordinator_update()

@@ -71,6 +71,5 @@ class UtilitiesSensor(CoordinatorEntity, SensorEntity):
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
         updated_value = self._coordinator.api.get_value(self._attr_unique_id)
-        if updated_value != self._attr_native_value:
-            self._attr_native_value = updated_value
-            self.async_write_ha_state()
+        self._attr_native_value = updated_value
+        super()._handle_coordinator_update()
