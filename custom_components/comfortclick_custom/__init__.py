@@ -15,6 +15,7 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
     Platform,
 )
+from homeassistant.helpers import config_validation as cv
 
 from .api import ApiInstance
 from .const import DOMAIN
@@ -23,6 +24,7 @@ from .migration import CONFIG_ENTRY_VERSION, async_import_mapping_options
 from .panel import async_register_configuration_panel
 
 _LOGGER = logging.getLogger(__name__)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -394,6 +394,9 @@ class ComfortClickConfiguration extends HTMLElement {
     const actions = element("div", null, "actions");
     const selecting = ["edit_mapping", "remove_mapping"].includes(result.step_id);
     const informational = !fields.length;
+    if (!informational) {
+      actions.append(this._button("Cancel", () => void this._run(() => this._restart([...this._backTrail]))));
+    }
     if (!informational || !errors.base) {
       const submit = element("button", selecting ? "Continue" : informational ? "Return to configuration" : "Save", "primary");
       submit.type = "submit";

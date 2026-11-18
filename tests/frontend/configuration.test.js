@@ -112,6 +112,25 @@ const tests = [
       await click(panel, "← Back"); assert(panel._result.step_id === "init", "Category Back missed root");
     } finally { panel.remove(); }
   }],
+  ["Cancel skips invalid-field validation and discards changes without submitting", async () => {
+    const { panel, calls } = await editor();
+    try {
+      await click(panel, "Fans"); await click(panel, "Add fan");
+      panel.shadowRoot.querySelector('[name="name"]').value = "";
+      panel.shadowRoot.querySelector('[name="fan_id"]').value = "unsaved-manual-path";
+      const actions = [...panel.shadowRoot.querySelectorAll(".actions button")];
+      assert(actions[0].textContent === "Cancel" && actions[0].type === "button", "Cancel is not a non-submit button before Save");
+      assert(actions[1].textContent === "Save", "Save no longer follows Cancel");
+      const before = calls.length;
+      await click(panel, "Cancel");
+      const navigation = calls.slice(before);
+      assert(navigation.length === 3 && navigation[0].method === "DELETE", "Cancel did not discard the current flow");
+      assert(navigation[1].data.handler === "one" && navigation[2].data.next_step_id === "fans", "Cancel sent form data instead of menu navigation");
+      assert(panel._result.step_id === "mapping", "Cancel missed the parent menu");
+      await click(panel, "Add fan");
+      assert(panel.shadowRoot.querySelector('[name="fan_id"]').value === " Old\\Fan ", "Cancelled draft was replayed");
+    } finally { panel.remove(); }
+  }],
   ["Save preserves raw paths, numbers and room clearing, then stays at root", async () => {
     const { panel, calls } = await editor();
     try {

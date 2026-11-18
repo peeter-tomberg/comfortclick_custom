@@ -93,7 +93,8 @@ immutable mapping IDs rather than list positions. Labels show names and rooms.
 
 The admin-only ComfortClick sidebar page uses the existing options-flow REST
 endpoints for all validation and persistence. It adds Back navigation that the
-native form dialog does not provide. Back aborts the current flow, creates a new
+native form dialog does not provide. Cancel beside Save performs the same action
+without validating the draft. Back or Cancel aborts the current flow, creates a new
 one, and replays only checked menu choices to reach the parent list. Form inputs
 are never replayed, so Back discards unsaved changes without issuing a command or
 rewriting settings. The Configuration shortcut returns directly to the root.

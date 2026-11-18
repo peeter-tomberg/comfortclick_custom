@@ -21,8 +21,8 @@ Integrated a wide range of different entities:
 ## Configuration
 
 Open **ComfortClick** in the Home Assistant sidebar to manage the apartment's
-devices. Each edit view has **Back** to discard unsaved changes and return to its
-list, and **Configuration** to return to the main menu. Saving returns to the main
+devices. Each edit view has **Cancel** beside Save and **Back** at the top to discard
+unsaved changes and return to its list, and **Configuration** to return to the main menu. Saving returns to the main
 menu without closing the editor. Changed settings reload the integration.
 
 Air conditioners and fans appear as clickable rows with their names and rooms.
