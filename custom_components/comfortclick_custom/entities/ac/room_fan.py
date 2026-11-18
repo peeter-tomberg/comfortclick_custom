@@ -106,15 +106,15 @@ class RoomFan(CoordinatorEntity, FanEntity):
         **_kwargs: Any,
     ) -> None:
         """Turn on the fan."""
+        await self._coordinator.api.set_value(self._config.lock_id, value=False)
         self._attr_is_on = True
         self.async_write_ha_state()
-        await self._coordinator.api.set_value(self._config.lock_id, value=False)
 
     async def async_turn_off(self, **_kwargs: Any) -> None:
         """Turn the fan off."""
+        await self._coordinator.api.set_value(self._config.lock_id, value=True)
         self._attr_is_on = False
         self.async_write_ha_state()
-        await self._coordinator.api.set_value(self._config.lock_id, value=True)
 
     @callback
     def _handle_coordinator_update(self) -> None:
