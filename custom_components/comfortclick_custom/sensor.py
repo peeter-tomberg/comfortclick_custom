@@ -24,11 +24,11 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][config_entry.entry_id].coordinator
 
     utilities_configs = await load_utilities_config(config_entry.options)
-    vent_config = await load_vent_config()
+    vent_config = await load_vent_config(config_entry.options)
 
     sensors = [UtilitiesSensor(coordinator, config) for config in utilities_configs]
 
-    if vent_config is not None:
+    if vent_config is not None and vent_config.has_temperature_paths:
         sensors.append(VentTemperatureSensor(coordinator, vent_config))
 
     # Create the sensors.

@@ -24,6 +24,7 @@ async def load_fans_config(
             current_temperature_id=item.get("current_temperature_id", None),
             target_temperature_id=item.get("target_temperature_id", None),
             unique_id=item.get("unique_id"),
+            area_id=item.get("area_id"),
         )
         for item in data.get("fans", [])
     ]

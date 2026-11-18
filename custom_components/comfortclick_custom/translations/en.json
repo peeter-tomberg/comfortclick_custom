@@ -24,11 +24,14 @@
     "step": {
       "init": {
         "title": "ComfortClick configuration",
-        "description": "Configure multiple fans, air conditioners and utility meters. Existing YAML mappings remain active until you save changes to that category.",
+        "description": "Map the fixed building doors, utility meters and ventilation controls. Add separate air conditioners and fans for each room. Existing mappings are loaded automatically.",
         "menu_options": {
-          "fans": "Fans",
+          "ventilation": "Ventilation",
+          "locks": "Building doors",
+          "utilities": "Utility meters",
           "thermostats": "Air conditioners",
-          "utilities": "Metrics (utility meters)",
+          "fans": "Fans",
+          "doorbell": "Doorbell",
           "connection": "Connection"
         }
       },
@@ -77,7 +80,8 @@
           "fan_id": "Fan level path",
           "heating_id": "Heating active path",
           "current_temperature_id": "Current temperature path",
-          "target_temperature_id": "Target temperature path"
+          "target_temperature_id": "Target temperature path",
+          "area_id": "Room"
         }
       },
       "thermostat": {
@@ -91,16 +95,15 @@
           "fan_id": "Fan level path",
           "min_temp": "Minimum temperature",
           "max_temp": "Maximum temperature",
-          "target_temperature_step": "Temperature step"
+          "target_temperature_step": "Temperature step",
+          "area_id": "Room"
         }
       },
       "utility": {
-        "title": "Utility meter mapping",
-        "description": "Choose a cached ComfortClick device path or type one manually. No device commands are sent while configuring. Saving reloads the integration. Map cumulative totals, not instantaneous power or flow. Default units are m³ for water, kWh for electricity and MWh for heating. Select the unit reported by the controller; this does not rescale the raw reading.",
+        "title": "{name}",
+        "description": "Edit this fixed meter’s reading path. The slot and its history remain the same. Match the unit to the raw cumulative reading; changing the unit does not rescale it. Leave the path empty if unconfigured. Saving reloads the integration.",
         "data": {
-          "name": "Name",
           "id": "Meter reading path",
-          "type": "Meter type",
           "unit": "Reading unit"
         }
       },
@@ -113,8 +116,72 @@
         "description": "Fix the YAML configuration and submit to retry loading the mappings."
       },
       "utilities": {
-        "title": "Metrics",
-        "description": "Fix the YAML configuration and submit to retry loading the mappings."
+        "title": "Utility meters",
+        "description": "These five meters are fixed. Choose one to edit its controller path and reading unit.",
+        "menu_options": {
+          "meter_electricity_day": "Electricity — day",
+          "meter_electricity_night": "Electricity — night",
+          "meter_water_cold": "Cold water",
+          "meter_water_hot": "Hot water",
+          "meter_heating": "Heating",
+          "init": "Back"
+        }
+      },
+      "locks": {
+        "title": "Building doors",
+        "description": "These three doors belong to the building. Choose a door to edit its controller path. Configuration does not unlock a door.",
+        "menu_options": {
+          "door_main": "Main door",
+          "door_cellar": "Cellar door",
+          "door_garage": "Garage door",
+          "init": "Back"
+        }
+      },
+      "door": {
+        "title": "{name}",
+        "description": "Edit this building door’s controller path. Leave it empty if unconfigured. Saving reloads the integration and does not send a door command.",
+        "data": {
+          "door_id": "Door control and feedback path"
+        }
+      },
+      "ventilation": {
+        "title": "Ventilation",
+        "description": "One instance of each control serves the apartment. Each control can use several underlying controller paths.",
+        "menu_options": {
+          "vent_mode": "Mode — Away / Home / Guests",
+          "vent_air_mode": "Air mode — Warm / Cold",
+          "vent_temperature": "Air temperature",
+          "init": "Back"
+        }
+      },
+      "vent_mode": {
+        "title": "Ventilation mode",
+        "description": "Map the three boolean mode paths behind the single ventilation selector. Selecting a mode sends true to its path. Map all three paths to enable the selector. Saving reloads the integration.",
+        "data": {
+          "away_mode": "Away path",
+          "home_mode": "Home path",
+          "guest_mode": "Guests path"
+        }
+      },
+      "vent_air_mode": {
+        "title": "Ventilation air mode",
+        "description": "Map the winter-mode boolean behind the single air selector. True means Warm air; false means Cold air. Leave it empty if unconfigured. Saving reloads the integration.",
+        "data": {
+          "vent_winter_mode": "Winter-mode path"
+        }
+      },
+      "vent_temperature": {
+        "title": "Ventilation air temperature",
+        "description": "One temperature sensor displays the reading for the active ventilation mode. Map the mode paths first, then the relevant temperature readings below. Missing readings remain unavailable. Saving reloads the integration.",
+        "data": {
+          "away_vent_air_temp": "Air temperature while Away",
+          "home_vent_air_temp": "Air temperature while Home",
+          "guest_vent_air_temp": "Air temperature while Guests"
+        }
+      },
+      "doorbell": {
+        "title": "Doorbell",
+        "description": "One ComfortClick Doorbell event is created automatically for this controller. Use it in your doorbell automations. No manual mapping is required. Submit to return to configuration."
       }
     },
     "error": {
@@ -125,10 +192,12 @@
       "invalid_type": "Select a supported meter type.",
       "invalid_unit": "Select a water unit for water, or an energy unit for electricity and heating.",
       "cannot_load_mappings": "Unable to read the mappings. Check comfortclick_custom.yaml for invalid YAML or an invalid category list, then retry.",
-      "incompatible_meter_type": "Water and energy meters cannot share the same history. Add a separate meter mapping for this type."
+      "incompatible_meter_type": "Water and energy meters cannot share the same history. Add a separate meter mapping for this type.",
+      "cannot_load_fixed_mappings": "An existing mapping could not be assigned uniquely to the fixed slots. Check its name or explicit slot in comfortclick_custom.yaml. No mappings have been changed."
     },
     "abort": {
-      "mappings_changed": "These mappings changed in another configuration window. Reopen Configure to use the latest values."
+      "mappings_changed": "These mappings changed in another configuration window. Reopen Configure to use the latest values.",
+      "fixed_slots": "This category has predefined slots. Open its menu to edit a slot; slots cannot be added or removed."
     }
   },
   "selector": {

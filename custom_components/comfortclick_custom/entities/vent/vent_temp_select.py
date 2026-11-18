@@ -28,18 +28,31 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
     ) -> None:
         """Initialize the vent temp mode select."""
         self._attr_options = [VentTempModes.WARM_AIR, VentTempModes.COLD_AIR]
-        self._attr_current_option = None
 
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-temp-select"
         # coordinator that manages state
         self._coordinator = coordinator
         self._config = config
+        self._attr_current_option = self._get_current_option()
         # human-readable name
         self._attr_name = "Ventilation temperature"
 
         # start listener on coordinator
         super().__init__(coordinator)
+
+    @property
+    def available(self) -> bool:
+        """Return availability only when warm/cold mode feedback is known."""
+        return super().available and self.current_option is not None
+
+    def _get_current_option(self) -> VentTempModes | None:
+        if not self._config.has_winter_mode:
+            return None
+        value = self._coordinator.api.get_value(self._config.vent_winter_mode)
+        if not isinstance(value, bool):
+            return None
+        return VentTempModes.WARM_AIR if value else VentTempModes.COLD_AIR
 
     def _turn_on_winter_mode(self) -> None:
         if self.current_option != VentTempModes.WARM_AIR:
@@ -71,11 +84,5 @@ class VentTempSelect(CoordinatorEntity, SelectEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        # If winter mode is on, that means warm air is being pushed in
-        is_winter_mode_on = self._coordinator.api.get_value(
-            self._config.vent_winter_mode
-        )
-        self._attr_current_option = (
-            VentTempModes.WARM_AIR if is_winter_mode_on else VentTempModes.COLD_AIR
-        )
+        self._attr_current_option = self._get_current_option()
         super()._handle_coordinator_update()

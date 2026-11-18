@@ -21,40 +21,63 @@ Integrated a wide range of different entities:
 ## Configuration
 
 Open **Settings → Devices & services → ComfortClick → Configure** to manage
-**Fans**, **Air conditioners**, and **Metrics (utility meters)**. Each section
-lists the current mappings and offers **Add mapping**, **Edit mapping**, and
-**Remove mapping**. Add as many separate devices or meters as you need. Saving
-one mapping reloads the integration; reopen Configure to manage another.
+the apartment's devices. Saving one form reloads the integration; reopen Configure
+to manage another.
+
+| Section | Available configuration |
+| --- | --- |
+| Ventilation | One Away/Home/Guests mode selector, one Warm/Cold air selector, and one air-temperature sensor |
+| Building doors | Three fixed doors: Main, Cellar, and Garage |
+| Utility meters | Five fixed totals: day electricity, night electricity, cold water, hot water, and heating |
+| Air conditioners | Add, edit, or remove multiple thermostats and assign each to a Home Assistant room |
+| Fans | Add, edit, or remove multiple fans and assign each to a Home Assistant room |
+| Doorbell | Information about the one event entity created automatically per integration entry |
+| Connection | HTTPS certificate verification |
+
+Doors and meters have fixed slots. Select a slot to edit its controller path;
+their names and meter types are not editable. Leave a path blank to stop exposing
+that slot's entity. The slot remains available for configuration later.
+Ventilation has one configuration: its three forms update the same system.
 
 Path fields are searchable lists of device paths already received from the
 controller. You can also enter a path manually, including while the controller is
-offline. Opening or editing these forms does not send device commands or create
-extra HTTP connections. Temperature limits and steps use Celsius.
+offline. Paths are preserved exactly, including trailing spaces: a controller
+path ending in `"Setpoint "` is different from one ending in `"Setpoint"`.
+Opening or editing forms does not send device commands or open extra controller
+connections. Temperature limits and steps use Celsius.
 
 - **Fans:** map the lock (true means off), fan level, heating-active state, current
   temperature, and target temperature.
 - **Air conditioners:** map heating-active state and both temperatures, optionally
   a fan level. Leave the fan path blank for a heating-only thermostat. Configure
   minimum/maximum temperatures and the setpoint step per device.
-- **Metrics:** map cumulative water, electricity, or heating totals. Defaults are
+- **Utility meters:** map cumulative water, electricity, or heating totals. Defaults are
   m³ for water, kWh for electricity, and MWh for heating. An optional unit choice
   must match the raw controller reading; it does not rescale that value. These
   mappings are not instantaneous power or flow sensors.
 
+The **Room** field on fan and air-conditioner forms uses existing Home Assistant
+areas. Existing entity room assignments are suggested when importing a mapping.
+Clearing the field removes the entity's room assignment when the integration reloads.
+
 Existing `comfortclick_custom.yaml` mappings are shown automatically. A category
 continues using YAML until you first save a change to that category; after that,
-its entire list is stored in the integration's options. An empty saved list means
-no mappings, rather than falling back to YAML. Names and paths can be edited
-without replacing the entity identity, preserving entity IDs, references, and
-recorded history. Map only the same physical meter when editing a historic meter's
-path; use **Add mapping** for a different meter.
+its configuration is stored in the integration's options. An explicit empty saved
+category does not fall back to YAML. Importing doors and meters matches their
+existing names and types to fixed slots, regardless of YAML order. If a record
+cannot be matched unambiguously, the form reports an error without discarding it.
+Use the door and meter names listed above to resolve an ambiguous legacy mapping.
 
-Removal requires confirmation and stops providing that entity. The old entity
+Editing an existing mapping preserves its entity identity, references, and
+recorded history. Change a meter's path only to another path for the same physical
+meter; the fixed catalog does not provide extra meters.
+
+Removing a fan or air conditioner requires confirmation and stops providing that
+entity. Clearing a fixed door or meter path also stops providing its entity. The old entity
 registry entry may remain unavailable, and its history is retained rather than
 purged. It can be removed separately in Home Assistant. New UI mappings belong to
-the selected integration entry. Locks and ventilation remain in
-`comfortclick_custom.yaml`; a new installation can configure fans, air
-conditioners, and meters entirely through the UI without that file.
+the selected integration entry. A new installation can configure all mappings
+through these forms without a YAML file.
 
 The doorbell event entity is created automatically for each ComfortClick
 integration entry. See [mapping architecture](docs/mapping-configuration.md) for

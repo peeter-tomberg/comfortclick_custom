@@ -12,9 +12,11 @@ import voluptuous as vol
 import yaml
 from homeassistant import config_entries
 from homeassistant.const import CONF_VERIFY_SSL
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
 from .const import DOMAIN
+from .fixed_mappings import DOOR_SLOTS, METER_SLOTS, VENT_FIELDS, import_fixed_mappings
 from .util.read_yaml import read_yaml
 
 FAN_PATHS = (
@@ -30,8 +32,8 @@ THERMOSTAT_PATHS = (
     "target_temperature_id",
     "fan_id",
 )
-PRIMARY_PATH = {"fans": "fan_id", "thermostats": "heating_id", "utilities": "id"}
-SECTION_FORM = {"fans": "fan", "thermostats": "thermostat", "utilities": "utility"}
+PRIMARY_PATH = {"fans": "fan_id", "thermostats": "heating_id"}
+SECTION_FORM = {"fans": "fan", "thermostats": "thermostat"}
 METER_UNITS = {
     "water": ("m³", "L"),
     "electricity": ("Wh", "kWh", "MWh"),
@@ -41,7 +43,7 @@ METER_UNITS = {
 
 def _canonical_path(path: str) -> str:
     """Match the API's path comparison without changing stored entity identity."""
-    return path.replace("\\\\", "\\").strip()
+    return path.replace("\\\\", "\\")
 
 
 def _legacy_identity(section: str, mapping: Mapping[str, Any]) -> str:
@@ -96,23 +98,6 @@ def _validate_temperatures(
         errors["max_temp"] = "invalid_range"
 
 
-def _validate_meter(
-    user_input: dict[str, Any], result: dict[str, Any], errors: dict[str, str]
-) -> None:
-    """Validate compatible reading units for cumulative utility meters."""
-    meter_type = user_input.get("type")
-    if meter_type not in METER_UNITS:
-        errors["type"] = "invalid_type"
-    else:
-        result["type"] = meter_type
-    unit = user_input.get("unit", "default")
-    if unit != "default":
-        if unit not in METER_UNITS.get(meter_type, ()):
-            errors["unit"] = "invalid_unit"
-        else:
-            result["unit"] = unit
-
-
 def _validate_mapping(
     section: str,
     user_input: dict[str, Any],
@@ -122,13 +107,7 @@ def _validate_mapping(
     """Validate a form without changing the current mappings or controller."""
     errors: dict[str, str] = {}
     result: dict[str, Any] = {}
-    fields = (
-        FAN_PATHS
-        if section == "fans"
-        else THERMOSTAT_PATHS
-        if section == "thermostats"
-        else ("id",)
-    )
+    fields = FAN_PATHS if section == "fans" else THERMOSTAT_PATHS
     for key in ("name", *fields):
         value = user_input.get(key)
         optional = section == "thermostats" and key == "fan_id"
@@ -137,7 +116,7 @@ def _validate_mapping(
         elif not isinstance(value, str) or not value.strip():
             errors[key] = "required"
         else:
-            result[key] = value.strip()
+            result[key] = value.strip() if key == "name" else value
 
     # The primary reading path identifies a mapping. Also reject two controls
     # writing to the same fan lock or temperature setpoint within one category.
@@ -158,15 +137,6 @@ def _validate_mapping(
 
     if section == "thermostats":
         _validate_temperatures(user_input, result, errors)
-    elif section == "utilities":
-        _validate_meter(user_input, result, errors)
-        if (
-            index is not None
-            and "type" in result
-            and mappings[index].get("type") in METER_UNITS
-            and (mappings[index]["type"] == "water") != (result["type"] == "water")
-        ):
-            errors["type"] = "incompatible_meter_type"
     return result, errors
 
 
@@ -185,7 +155,15 @@ class OptionsFlow(config_entries.OptionsFlow):
         """Choose the kind of configuration to manage."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["fans", "thermostats", "utilities", "connection"],
+            menu_options=[
+                "ventilation",
+                "locks",
+                "utilities",
+                "thermostats",
+                "fans",
+                "doorbell",
+                "connection",
+            ],
         )
 
     async def async_step_connection(self, user_input: dict | None = None) -> Any:
@@ -231,11 +209,234 @@ class OptionsFlow(config_entries.OptionsFlow):
         return await self._open_section("thermostats")
 
     async def async_step_utilities(self, _user_input: dict | None = None) -> Any:
-        """Manage utility meter mappings."""
-        return await self._open_section("utilities")
+        """Show the five fixed utility meters."""
+        return await self._open_fixed("utilities")
+
+    async def async_step_locks(self, _user_input: dict | None = None) -> Any:
+        """Show the three fixed building doors."""
+        return await self._open_fixed("locks")
+
+    async def _open_fixed(self, section: str) -> Any:
+        """Load fixed slots without persisting anything just by opening them."""
+        self._section = section
+        self._index = None
+        self._original_section = deepcopy(self._entry.options.get(section))
+        try:
+            source = (
+                self._entry.options
+                if section in self._entry.options
+                else await read_yaml()
+            )
+            self._mappings = import_fixed_mappings(
+                source, section, self._entry.entry_id
+            )
+        except (OSError, ValueError, TypeError, yaml.YAMLError):
+            return self.async_show_form(
+                step_id=section,
+                data_schema=vol.Schema({}),
+                errors={"base": "cannot_load_fixed_mappings"},
+            )
+        slots = METER_SLOTS if section == "utilities" else DOOR_SLOTS
+        prefix = "meter" if section == "utilities" else "door"
+        return self.async_show_menu(
+            step_id=section,
+            menu_options=[*(f"{prefix}_{slot}" for slot in slots), "init"],
+        )
+
+    def _fixed_slot(self, slot: str) -> Any:
+        """Edit one predefined slot without allowing additions or removals."""
+        self._index = next(
+            index for index, item in enumerate(self._mappings) if item["slot"] == slot
+        )
+        return self._fixed_form()
+
+    async def async_step_meter_electricity_day(
+        self, _user_input: dict | None = None
+    ) -> Any:
+        """Edit the day electricity meter."""
+        return self._fixed_slot("electricity_day")
+
+    async def async_step_meter_electricity_night(
+        self, _user_input: dict | None = None
+    ) -> Any:
+        """Edit the night electricity meter."""
+        return self._fixed_slot("electricity_night")
+
+    async def async_step_meter_water_cold(self, _user_input: dict | None = None) -> Any:
+        """Edit the cold water meter."""
+        return self._fixed_slot("water_cold")
+
+    async def async_step_meter_water_hot(self, _user_input: dict | None = None) -> Any:
+        """Edit the hot water meter."""
+        return self._fixed_slot("water_hot")
+
+    async def async_step_meter_heating(self, _user_input: dict | None = None) -> Any:
+        """Edit the heating meter."""
+        return self._fixed_slot("heating")
+
+    async def async_step_door_main(self, _user_input: dict | None = None) -> Any:
+        """Edit the building main door."""
+        return self._fixed_slot("main")
+
+    async def async_step_door_cellar(self, _user_input: dict | None = None) -> Any:
+        """Edit the building cellar door."""
+        return self._fixed_slot("cellar")
+
+    async def async_step_door_garage(self, _user_input: dict | None = None) -> Any:
+        """Edit the building garage door."""
+        return self._fixed_slot("garage")
+
+    def _fixed_form(
+        self, values: dict | None = None, errors: dict | None = None
+    ) -> Any:
+        """Keep the slot's name, type and identity separate from editable paths."""
+        mapping = self._mappings[self._index]
+        values = mapping if values is None else values
+        path_key = "id" if self._section == "utilities" else "door_id"
+        name_key = "name" if self._section == "utilities" else "door_name"
+        default_name = (
+            METER_SLOTS[mapping["slot"]][0]
+            if self._section == "utilities"
+            else DOOR_SLOTS[mapping["slot"]]
+        )
+        schema = {
+            vol.Optional(
+                path_key, description={"suggested_value": values.get(path_key, "")}
+            ): self._path_selector(values.get(path_key))
+        }
+        if self._section == "utilities":
+            schema[vol.Required("unit", default=values.get("unit", "default"))] = (
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["default", *METER_UNITS[mapping["type"]]],
+                        translation_key="meter_unit",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                )
+            )
+        return self.async_show_form(
+            step_id="utility" if self._section == "utilities" else "door",
+            description_placeholders={"name": mapping.get(name_key) or default_name},
+            data_schema=vol.Schema(schema),
+            errors=errors or {},
+        )
+
+    def _submit_fixed(self, user_input: dict | None) -> Any:
+        """Save exactly one slot and retain all remaining slots and history."""
+        if user_input is None:
+            return self._fixed_form()
+        mapping = deepcopy(self._mappings[self._index])
+        path_key = "id" if self._section == "utilities" else "door_id"
+        path = user_input.get(path_key) or ""
+        errors = {}
+        if not isinstance(path, str):
+            errors[path_key] = "required"
+        elif path and any(
+            index != self._index
+            and item.get(path_key)
+            and _canonical_path(item[path_key]) == _canonical_path(path)
+            for index, item in enumerate(self._mappings)
+        ):
+            errors[path_key] = "duplicate_path"
+        else:
+            mapping[path_key] = path if path.strip() else ""
+        if self._section == "utilities":
+            unit = user_input.get("unit", "default")
+            if unit == "default":
+                mapping.pop("unit", None)
+            elif unit in METER_UNITS[mapping["type"]]:
+                mapping["unit"] = unit
+            else:
+                errors["unit"] = "invalid_unit"
+        if errors:
+            return self._fixed_form(user_input, errors)
+        mappings = deepcopy(self._mappings)
+        mappings[self._index] = mapping
+        return self._save_mappings(mappings)
+
+    async def async_step_door(self, user_input: dict | None = None) -> Any:
+        """Save a building door path without sending an unlock command."""
+        return self._submit_fixed(user_input)
+
+    async def async_step_ventilation(self, _user_input: dict | None = None) -> Any:
+        """Show the three single ventilation controls."""
+        self._section = "vent"
+        self._original_section = deepcopy(self._entry.options.get("vent"))
+        try:
+            source = (
+                self._entry.options
+                if "vent" in self._entry.options
+                else await read_yaml()
+            )
+            self._vent = deepcopy(source.get("vent", {}))
+            if not isinstance(self._vent, dict):
+                return self.async_show_form(
+                    step_id="ventilation",
+                    data_schema=vol.Schema({}),
+                    errors={"base": "cannot_load_mappings"},
+                )
+        except (OSError, ValueError, TypeError, yaml.YAMLError):
+            return self.async_show_form(
+                step_id="ventilation",
+                data_schema=vol.Schema({}),
+                errors={"base": "cannot_load_mappings"},
+            )
+        return self.async_show_menu(
+            step_id="ventilation",
+            menu_options=[*VENT_FIELDS, "init"],
+        )
+
+    def _vent_form(self, step: str, user_input: dict | None) -> Any:
+        """Edit one ventilation control, preserving the other controls."""
+        errors = {}
+        if user_input is not None:
+            updated = deepcopy(self._vent)
+            for field in VENT_FIELDS[step]:
+                path = user_input.get(field) or ""
+                if not isinstance(path, str):
+                    errors[field] = "required"
+                else:
+                    updated[field] = path if path.strip() else ""
+            if not errors:
+                if self._entry.options.get("vent") != self._original_section:
+                    return self.async_abort(reason="mappings_changed")
+                return self._save_options({"vent": updated})
+        values = self._vent if user_input is None else user_input
+        return self.async_show_form(
+            step_id=step,
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        field, description={"suggested_value": values.get(field) or ""}
+                    ): self._path_selector(values.get(field))
+                    for field in VENT_FIELDS[step]
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_vent_mode(self, user_input: dict | None = None) -> Any:
+        """Configure one Home/Away/Guests selector."""
+        return self._vent_form("vent_mode", user_input)
+
+    async def async_step_vent_air_mode(self, user_input: dict | None = None) -> Any:
+        """Configure one warm/cold air selector."""
+        return self._vent_form("vent_air_mode", user_input)
+
+    async def async_step_vent_temperature(self, user_input: dict | None = None) -> Any:
+        """Configure the readings behind one ventilation temperature sensor."""
+        return self._vent_form("vent_temperature", user_input)
+
+    async def async_step_doorbell(self, user_input: dict | None = None) -> Any:
+        """Explain the one automatically created ring event."""
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(step_id="doorbell", data_schema=vol.Schema({}))
 
     async def async_step_mapping(self, _user_input: dict | None = None) -> Any:
         """List configured names and available operations."""
+        if self._section not in ("fans", "thermostats"):
+            return self.async_abort(reason="fixed_slots")
         operations = ["add_mapping"]
         if self._mappings:
             operations.extend(("edit_mapping", "remove_mapping"))
@@ -254,11 +455,15 @@ class OptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_add_mapping(self, _user_input: dict | None = None) -> Any:
         """Start a new independent mapping."""
+        if self._section not in ("fans", "thermostats"):
+            return self.async_abort(reason="fixed_slots")
         self._index = None
         return self._mapping_form()
 
     async def _select_mapping(self, step: str, user_input: dict | None) -> Any:
         """Select a record by position, allowing equal display names."""
+        if self._section not in ("fans", "thermostats"):
+            return self.async_abort(reason="fixed_slots")
         errors = {}
         if user_input is not None:
             try:
@@ -306,6 +511,8 @@ class OptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_confirm_remove(self, user_input: dict | None = None) -> Any:
         """Confirm removal without deleting registry entries or history."""
+        if self._section not in ("fans", "thermostats"):
+            return self.async_abort(reason="fixed_slots")
         if self._index is None:
             return await self.async_step_mapping()
         if user_input is not None:
@@ -347,13 +554,21 @@ class OptionsFlow(config_entries.OptionsFlow):
                 "name", description={"suggested_value": values.get("name", "")}
             ): str
         }
-        fields = (
-            FAN_PATHS
-            if self._section == "fans"
-            else THERMOSTAT_PATHS
-            if self._section == "thermostats"
-            else ("id",)
+        area_id = values.get("area_id")
+        registry = self.hass.data.get(er.DATA_REGISTRY)
+        if area_id is None and registry and self._index is not None:
+            mapping = self._mappings[self._index]
+            entity_id = registry.async_get_entity_id(
+                "fan" if self._section == "fans" else "climate",
+                DOMAIN,
+                mapping["unique_id"],
+            )
+            if entity_id and (entity := registry.async_get(entity_id)):
+                area_id = entity.area_id
+        schema[vol.Optional("area_id", description={"suggested_value": area_id})] = (
+            selector.AreaSelector()
         )
+        fields = FAN_PATHS if self._section == "fans" else THERMOSTAT_PATHS
         for field in fields:
             marker = (
                 vol.Optional
@@ -378,25 +593,6 @@ class OptionsFlow(config_entries.OptionsFlow):
                         )
                     )
                 )
-        elif self._section == "utilities":
-            schema[vol.Required("type", default=values.get("type", "electricity"))] = (
-                selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=list(METER_UNITS),
-                        translation_key="meter_type",
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                )
-            )
-            schema[vol.Required("unit", default=values.get("unit", "default"))] = (
-                selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=["default", "m³", "L", "Wh", "kWh", "MWh"],
-                        translation_key="meter_unit",
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                )
-            )
         return self.async_show_form(
             step_id=SECTION_FORM[self._section],
             data_schema=vol.Schema(schema),
@@ -405,6 +601,8 @@ class OptionsFlow(config_entries.OptionsFlow):
 
     def _submit_mapping(self, user_input: dict | None) -> Any:
         """Commit only a valid mapping; keep identity on all edits."""
+        if self._section not in ("fans", "thermostats"):
+            return self.async_abort(reason="fixed_slots")
         if user_input is None:
             return self._mapping_form()
         mapping, errors = _validate_mapping(
@@ -412,6 +610,7 @@ class OptionsFlow(config_entries.OptionsFlow):
         )
         if errors:
             return self._mapping_form(user_input, errors)
+        mapping["area_id"] = user_input.get("area_id") or ""
         mappings = deepcopy(self._mappings)
         if self._index is None:
             mapping["unique_id"] = f"{self._entry.entry_id}-{uuid4().hex}"
@@ -431,7 +630,7 @@ class OptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_utility(self, user_input: dict | None = None) -> Any:
         """Validate and save a utility meter."""
-        return self._submit_mapping(user_input)
+        return self._submit_fixed(user_input)
 
     def _save_mappings(self, mappings: list[dict[str, Any]]) -> Any:
         """Avoid overwriting another options flow editing this same category."""

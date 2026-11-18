@@ -8,9 +8,6 @@ from custom_components.comfortclick_custom.entities.ac.room_fan import RoomFanCo
 from custom_components.comfortclick_custom.entities.ac.room_thermostat import (
     RoomThermostatConfig,
 )
-from custom_components.comfortclick_custom.entities.locks.building_lock import (
-    BuildingLockConfig,
-)
 from custom_components.comfortclick_custom.util.load_fans_config import load_fans_config
 from custom_components.comfortclick_custom.util.load_lock_config import load_lock_config
 from custom_components.comfortclick_custom.util.load_thermostats_config import (
@@ -63,10 +60,8 @@ async def test_vent_config_loader():
 @pytest.mark.asyncio
 async def test_locks_config_loader():
     configs = await load_lock_config()
-    assert isinstance(configs[0], BuildingLockConfig)
-    assert isinstance(configs[1], BuildingLockConfig)
-    assert configs[0].door_name == "Main door"
-    assert configs[1].door_name == "Cellar door"
+    # The example's blank paths are placeholders, not configured doors.
+    assert configs == []
 
 
 @pytest.mark.asyncio

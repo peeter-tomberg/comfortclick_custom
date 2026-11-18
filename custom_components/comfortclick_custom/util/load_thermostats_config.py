@@ -31,6 +31,7 @@ async def load_thermostats_config(
             min_temp=float(item.get("min_temp", 18)),
             max_temp=float(item.get("max_temp", 24)),
             unique_id=item.get("unique_id"),
+            area_id=item.get("area_id"),
         )
         for item in data.get("thermostats", [])
     ]

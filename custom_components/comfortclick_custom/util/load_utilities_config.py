@@ -55,4 +55,5 @@ async def load_utilities_config(
             unique_id=item.get("unique_id"),
         )
         for item in data.get("utilities", [])
+        if isinstance(item.get("id"), str) and item["id"].strip()
     ]
