@@ -272,7 +272,7 @@ class ApiInstance:
         payload = {
             "objectName": _sanitise_device_name(device_name),
             "valueName": "Value",
-            "value": value,
+            "value": json.dumps(value, separators=(",", ":"), allow_nan=False),
         }
         return await self._authenticated_request("SetValue", payload)
 
