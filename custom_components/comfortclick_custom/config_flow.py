@@ -12,6 +12,7 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_USERNAME,
 )
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ApiInstance
 from .const import DOMAIN
@@ -35,7 +36,7 @@ DATA_SCHEMA = vol.Schema(
 MIN_HOST_LENGTH = 3
 
 
-async def validate_input(_hass: HomeAssistant, data: dict) -> dict[str, Any]:
+async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     """
     Validate the user input allows us to connect.
 
@@ -44,20 +45,26 @@ async def validate_input(_hass: HomeAssistant, data: dict) -> dict[str, Any]:
     if len(data[CONF_HOST]) < MIN_HOST_LENGTH:
         raise InvalidHost
 
-    api = ApiInstance(data[CONF_USERNAME], data[CONF_PASSWORD], data[CONF_HOST])
+    api = ApiInstance(
+        data[CONF_USERNAME],
+        data[CONF_PASSWORD],
+        data[CONF_HOST],
+        session=async_get_clientsession(hass),
+    )
 
-    result = await api.connect()
-    if not result:
-        raise CannotConnect
-
-    return {"title": data[CONF_HOST]}
+    try:
+        result = await api.connect()
+        if not result:
+            raise CannotConnect
+        return {"title": data[CONF_HOST]}
+    finally:
+        await api.disconnect()
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Hello World."""
 
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_PUSH
 
     async def async_step_user(self, user_input: dict | None = None) -> Any:
         """Handle the initial step."""

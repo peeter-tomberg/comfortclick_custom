@@ -36,14 +36,22 @@ class BuildingLock(CoordinatorEntity, LockEntity):
         self._attr_unique_id = config.door_id
         # human-readable name
         self._attr_name = config.door_name
+        self._attr_is_open = self._get_is_open_from_api_state()
 
     @property
-    def is_locked(self) -> bool:
+    def available(self) -> bool:
+        """Only report availability when the lock has valid feedback."""
+        return super().available and self._attr_is_open is not None
+
+    @property
+    def is_locked(self) -> bool | None:
         """Determine if door is locked."""
+        if self._attr_is_open is None:
+            return None
         return not self._attr_is_open
 
     @property
-    def is_open(self) -> bool:
+    def is_open(self) -> bool | None:
         """Determine if door is open."""
         return self._attr_is_open
 
@@ -62,9 +70,9 @@ class BuildingLock(CoordinatorEntity, LockEntity):
         self._attr_is_open = False
         self.async_write_ha_state()
 
-    # The front door is by default locked and can be unlocked for a bit
-    def _get_is_open_from_api_state(self) -> bool:
-        return self._coordinator.api.get_value(device_name=self._config.door_id)
+    def _get_is_open_from_api_state(self) -> bool | None:
+        value = self._coordinator.api.get_value(device_name=self._config.door_id)
+        return value if isinstance(value, bool) else None
 
     async def async_unlock(self, **_kwargs: Any) -> None:
         """Unlocks the door."""
@@ -79,9 +87,5 @@ class BuildingLock(CoordinatorEntity, LockEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        updated_state_is_open = self._get_is_open_from_api_state()
-        if updated_state_is_open != self.is_open:
-            if updated_state_is_open:
-                self._mark_door_as_open()
-            else:
-                self._mark_door_as_locked()
+        self._attr_is_open = self._get_is_open_from_api_state()
+        super()._handle_coordinator_update()

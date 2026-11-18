@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 # List of platforms to support. There should be a matching .py file for each,
 # eg <cover.py> and <sensor.py>
@@ -35,7 +34,7 @@ type ApiConfigEntry = ConfigEntry[ApiInstance]
 class RuntimeData:
     """Data class to keep references that are used across the package."""
 
-    coordinator: DataUpdateCoordinator
+    coordinator: ComfortClickCoordinator
     cancel_update_listener: Callable
 
 
@@ -51,16 +50,25 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ApiConfigEntry) -
         hass, host=host, username=username, password=password
     )
 
-    await coordinator.async_config_entry_first_refresh()
-
-    cancel_update_listener = config_entry.add_update_listener(_async_update_listener)
-
-    hass.data[DOMAIN][config_entry.entry_id] = RuntimeData(
-        coordinator, cancel_update_listener
-    )
-
-    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
-    return True
+    setup_complete = False
+    cancel_update_listener = None
+    try:
+        await coordinator.async_config_entry_first_refresh()
+        cancel_update_listener = config_entry.add_update_listener(
+            _async_update_listener
+        )
+        hass.data[DOMAIN][config_entry.entry_id] = RuntimeData(
+            coordinator, cancel_update_listener
+        )
+        await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+        setup_complete = True
+        return True
+    finally:
+        if not setup_complete:
+            if cancel_update_listener is not None:
+                cancel_update_listener()
+            hass.data[DOMAIN].pop(config_entry.entry_id, None)
+            await coordinator.async_shutdown()
 
 
 async def _async_update_listener(
@@ -72,13 +80,13 @@ async def _async_update_listener(
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    hass.data[DOMAIN][config_entry.entry_id].cancel_update_listener()
-
     unload_ok = await hass.config_entries.async_unload_platforms(
         config_entry, PLATFORMS
     )
 
     if unload_ok:
-        hass.data[DOMAIN].pop(config_entry.entry_id)
+        runtime = hass.data[DOMAIN].pop(config_entry.entry_id)
+        runtime.cancel_update_listener()
+        await runtime.coordinator.async_shutdown()
 
     return unload_ok
