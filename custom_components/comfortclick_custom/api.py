@@ -82,6 +82,7 @@ class ApiInstance:
         self._password = password
         self._host = host
         self._session = session
+        self._closed = False
 
         self._state: dict[str, typing.Any] = {}
         self._authorized_headers = None
@@ -104,6 +105,8 @@ class ApiInstance:
 
     async def _request_json(self, path: str, payload: typing.Any = None) -> typing.Any:
         """Make one authenticated request without retrying side effects."""
+        if self._closed:
+            raise ApiClosedError
         async with self._session.post(
             f"{self._host}/{path}",
             json=payload,
@@ -120,6 +123,8 @@ class ApiInstance:
     async def _recover_session(self, failed_generation: int) -> None:
         """Renew one rejected session even when several requests fail together."""
         async with self._reconnect_lock:
+            if self._closed:
+                raise ApiClosedError
             if (
                 self._session_generation != failed_generation
                 and self._snapshot_generation == self._session_generation
@@ -135,7 +140,7 @@ class ApiInstance:
             self._next_reconnect = now + SESSION_RECOVERY_COOLDOWN
             self._snapshot_pending = True
             self._authorized_headers = None
-            await self.connect()
+            await self._login()
             await self.initialize_state()
 
     async def _authenticated_request(
@@ -205,6 +210,13 @@ class ApiInstance:
 
     async def connect(self) -> bool:
         """Login to ComfortClick API."""
+        async with self._reconnect_lock:
+            return await self._login()
+
+    async def _login(self) -> bool:
+        """Authenticate while holding the lifecycle lock."""
+        if self._closed:
+            raise ApiClosedError
         body = {
             "UserName": self._username,
             "Password": self._password,
@@ -284,24 +296,40 @@ class ApiInstance:
                 self._set_state_value(item.get("DeviceName"), item.get("Value"))
 
     async def disconnect(self) -> None:
-        """Log out from ComfortClick API."""
+        """Release the server session without closing Home Assistant's HTTP client."""
+        self._closed = True
+        async with self._reconnect_lock:
+            await self._logout()
+
+    async def _logout(self) -> None:
+        """Forget and release the last token after any active login finishes."""
+        headers = self._authorized_headers
+        self._authorized_headers = None
+        self._snapshot_pending = False
+        self._snapshot_generation = -1
+        if headers is None:
+            return
+        self._session_generation += 1
         url = f"{self._host}/Logout"
         _LOGGER.info(msg="Disconnecting from API")
 
-        async with self._session.get(
-            url,
-            headers=self._authorized_headers,
-            timeout=REQUEST_TIMEOUT,
-            ssl=False,
-        ) as response:
-            if response.status != HTTPStatus.OK:
-                raise HttpStatusNotOkError(
-                    {
-                        "message": "Failed to log out",
-                        "status": response.status,
-                        "text": await response.text(),
-                    }
-                )
+        try:
+            async with self._session.get(
+                url,
+                headers=headers,
+                timeout=REQUEST_TIMEOUT,
+                ssl=False,
+            ) as response:
+                if response.status not in (
+                    HTTPStatus.OK,
+                    HTTPStatus.UNAUTHORIZED,
+                    HTTPStatus.FORBIDDEN,
+                ):
+                    _LOGGER.warning(
+                        "Logout failed with HTTP status %s", response.status
+                    )
+        except (aiohttp.ClientError, TimeoutError) as err:
+            _LOGGER.warning("Unable to log out from ComfortClick: %s", err)
 
 
 class HttpStatusNotOkError(Exception):
@@ -314,3 +342,7 @@ class AuthorizationError(Exception):
 
 class ApiResponseError(Exception):
     """Raised when the server reports an error or returns malformed data."""
+
+
+class ApiClosedError(Exception):
+    """Raised when a request outlives the integration's active session."""
