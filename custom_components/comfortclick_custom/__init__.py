@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    CONF_VERIFY_SSL,
+    Platform,
+)
 
 from .api import ApiInstance
 from .const import DOMAIN
@@ -47,7 +53,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ApiConfigEntry) -
     password = config_entry.data[CONF_PASSWORD]
 
     coordinator = ComfortClickCoordinator(
-        hass, host=host, username=username, password=password
+        hass,
+        host=host,
+        username=username,
+        password=password,
+        verify_ssl=config_entry.options.get(
+            CONF_VERIFY_SSL, config_entry.data.get(CONF_VERIFY_SSL, False)
+        ),
     )
 
     setup_complete = False

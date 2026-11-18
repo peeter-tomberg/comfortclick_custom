@@ -76,12 +76,14 @@ class ApiInstance:
         host: str,
         *,
         session: aiohttp.ClientSession,
+        verify_ssl: bool = False,
     ) -> None:
         """Wire up the Api Instance class with props from constructor."""
         self._username = username
         self._password = password
         self._host = host
         self._session = session
+        self._verify_ssl = verify_ssl
         self._closed = False
 
         self._state: dict[str, typing.Any] = {}
@@ -112,7 +114,7 @@ class ApiInstance:
             json=payload,
             headers=self._authorized_headers,
             timeout=REQUEST_TIMEOUT,
-            ssl=False,
+            ssl=self._verify_ssl,
         ) as response:
             if response.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                 raise AuthorizationError({"status": response.status})
@@ -240,7 +242,7 @@ class ApiInstance:
             json=body,
             headers=default_headers,
             timeout=REQUEST_TIMEOUT,
-            ssl=False,
+            ssl=self._verify_ssl,
         ) as response:
             if response.status != HTTPStatus.OK:
                 raise HttpStatusNotOkError(
@@ -318,7 +320,7 @@ class ApiInstance:
                 url,
                 headers=headers,
                 timeout=REQUEST_TIMEOUT,
-                ssl=False,
+                ssl=self._verify_ssl,
             ) as response:
                 if response.status not in (
                     HTTPStatus.OK,
