@@ -60,7 +60,6 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
         is_home_mode_on = self._coordinator.api.get_value(self._config.home_mode)
         if is_home_mode_on and self.current_option != VentPresetModes.HOME:
             self._attr_current_option = VentPresetModes.HOME
-            self.async_write_ha_state()
             return True
         return False
 
@@ -68,7 +67,6 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
         is_away_mode_on = self._coordinator.api.get_value(self._config.away_mode)
         if is_away_mode_on and self.current_option != VentPresetModes.AWAY:
             self._attr_current_option = VentPresetModes.AWAY
-            self.async_write_ha_state()
             return True
         return False
 
@@ -76,16 +74,12 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
         is_guest_mode_on = self._coordinator.api.get_value(self._config.guest_mode)
         if is_guest_mode_on and self.current_option != VentPresetModes.GUESTS:
             self._attr_current_option = VentPresetModes.GUESTS
-            self.async_write_ha_state()
             return True
         return False
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        if self._check_home_mode():
-            return
-        if self._check_away_mode():
-            return
-        if self._check_guest_mode():
-            return
+        if not self._check_home_mode() and not self._check_away_mode():
+            self._check_guest_mode()
+        super()._handle_coordinator_update()

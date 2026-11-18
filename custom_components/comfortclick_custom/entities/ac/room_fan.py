@@ -9,6 +9,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ... import ComfortClickCoordinator
+from .values import numeric_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,11 +44,11 @@ class RoomFan(CoordinatorEntity, FanEntity):
         self._attr_supported_features = (
             FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
         )
-        self._attr_is_on = None
 
         # coordinator that manages state
         self._coordinator = coordinator
         self._config = config
+        self._attr_is_on = self._get_fan_state_from_api_state()
 
         # re-using heating id as unique id for this device
         self._attr_unique_id = config.fan_id
@@ -60,43 +61,59 @@ class RoomFan(CoordinatorEntity, FanEntity):
         _LOGGER.debug("Finished setting up")
 
     @property
+    def available(self) -> bool:
+        """Return whether coordinator and required fan readings are available."""
+        return super().available and self._attr_is_on is not None
+
+    @property
     def is_on(self) -> bool | None:
         """Return true if the entity is on."""
         return self._attr_is_on
 
-    def _get_fan_state_from_api_state(self) -> bool:
+    def _get_fan_state_from_api_state(self) -> bool | None:
+        lock = self._coordinator.api.get_value(self._config.lock_id)
+        heating = self._coordinator.api.get_value(self._config.heating_id)
+        fan = numeric_value(self._coordinator.api.get_value(self._config.fan_id))
+        current_temp = self._get_current_temperature_from_api_state()
+        target_temp = self._get_target_temperature_from_api_state()
+        if (
+            not isinstance(lock, bool)
+            or not isinstance(heating, bool)
+            or fan is None
+            or current_temp is None
+            or target_temp is None
+        ):
+            return None
         # If lock is on, fan cant be on
-        if self._coordinator.api.get_value(self._config.lock_id):
+        if lock:
             return False
         # If heating is on, fan cant be on
-        if self._coordinator.api.get_value(self._config.heating_id):
+        if heating:
             return False
         # If heating is off, meaning current temp is same or lower than target temp
         # Now we are trying to optimistically assume fan state based on temp
-        current_temp = self._get_current_temperature_from_api_state()
-        target_temp = self._get_target_temperature_from_api_state()
         temp_diff = current_temp - target_temp
 
         if temp_diff < FAN_TEMP_DIFF_THRESHOLD:
             return False
 
-        return self._coordinator.api.get_value(self._config.fan_id) > FAN_ON_THRESHOLD
+        return fan > FAN_ON_THRESHOLD
 
-    def _get_current_temperature_from_api_state(self) -> float:
-        current_temperature = self._coordinator.api.get_value(
-            self._config.current_temperature_id
+    def _get_current_temperature_from_api_state(self) -> float | None:
+        current_temperature = numeric_value(
+            self._coordinator.api.get_value(self._config.current_temperature_id)
         )
         if current_temperature is None:
-            return 0
-        return round(float(current_temperature), 1)
+            return None
+        return round(current_temperature, 1)
 
-    def _get_target_temperature_from_api_state(self) -> float:
-        target_temperature = self._coordinator.api.get_value(
-            self._config.target_temperature_id
+    def _get_target_temperature_from_api_state(self) -> float | None:
+        target_temperature = numeric_value(
+            self._coordinator.api.get_value(self._config.target_temperature_id)
         )
         if target_temperature is None:
-            return 0
-        return round(float(target_temperature), 1)
+            return None
+        return round(target_temperature, 1)
 
     async def async_turn_on(
         self,
@@ -106,31 +123,20 @@ class RoomFan(CoordinatorEntity, FanEntity):
         **_kwargs: Any,
     ) -> None:
         """Turn on the fan."""
+        await self._coordinator.api.set_value(self._config.lock_id, value=False)
         self._attr_is_on = True
         self.async_write_ha_state()
-        await self._coordinator.api.set_value(self._config.lock_id, value=False)
 
     async def async_turn_off(self, **_kwargs: Any) -> None:
         """Turn the fan off."""
+        await self._coordinator.api.set_value(self._config.lock_id, value=True)
         self._attr_is_on = False
         self.async_write_ha_state()
-        await self._coordinator.api.set_value(self._config.lock_id, value=True)
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
         _LOGGER.debug("Received update from coordinator")
 
-        new_is_on = self._get_fan_state_from_api_state()
-        has_changed = False
-
-        # Did we actually get a change?
-        if new_is_on != self._attr_is_on:
-            has_changed = True
-
-        self._attr_is_on = new_is_on
-
-        # Sync state to HomeAssistant
-        if has_changed:
-            _LOGGER.debug("Updating HA states")
-            self.async_write_ha_state()
+        self._attr_is_on = self._get_fan_state_from_api_state()
+        super()._handle_coordinator_update()
