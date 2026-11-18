@@ -58,7 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ApiConfigEntry) -
         username=username,
         password=password,
         verify_ssl=config_entry.options.get(
-            CONF_VERIFY_SSL, config_entry.data.get(CONF_VERIFY_SSL, True)
+            CONF_VERIFY_SSL, config_entry.data.get(CONF_VERIFY_SSL, False)
         ),
     )
 

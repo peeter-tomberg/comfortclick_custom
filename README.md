@@ -23,16 +23,18 @@ They are all configurable from `comfortclick_custom.yaml` that should be created
 
 ### HTTPS certificate verification
 
-HTTPS certificates are verified by default, including for existing entries after
-upgrading. Use a controller URL whose hostname matches its trusted certificate.
+Certificate verification is off by default to preserve compatibility with local
+controllers whose certificates are self-signed or invalid. This applies to new
+entries and existing entries without a saved preference. Explicitly saved settings
+are preserved, so an entry with verification enabled keeps it enabled.
 
-If your local controller uses a self-signed certificate and stops connecting after
-this update, open **Settings → Devices & services → ComfortClick → Configure** and
-disable **Verify SSL certificate** for that entry. This setting is also available
-during initial setup. Options can be saved while the controller is unavailable;
-Home Assistant reloads the entry after the change. No entities need to be deleted.
+To enable verification, use a controller URL whose hostname matches its trusted
+certificate, then open **Settings → Devices & services → ComfortClick → Configure**
+and enable **Verify SSL certificate**. This setting is also available during initial
+setup. Options can be saved while the controller is unavailable; Home Assistant
+reloads the entry after the change. No entities need to be deleted.
 
-Disabling verification prevents Home Assistant from authenticating the controller
-and exposes credentials and commands to interception. Use this exception only for
-a trusted local controller, and re-enable it after installing a trusted certificate.
-There is no automatic fallback to an unverified connection.
+With verification off, Home Assistant cannot authenticate the controller's
+certificate, exposing credentials and commands to interception. Enable verification
+when the controller has a trusted certificate. If enabled verification fails, the
+integration reports the error without automatically disabling verification.

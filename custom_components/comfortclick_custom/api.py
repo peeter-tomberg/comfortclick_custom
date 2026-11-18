@@ -76,7 +76,7 @@ class ApiInstance:
         host: str,
         *,
         session: aiohttp.ClientSession,
-        verify_ssl: bool = True,
+        verify_ssl: bool = False,
     ) -> None:
         """Wire up the Api Instance class with props from constructor."""
         self._username = username

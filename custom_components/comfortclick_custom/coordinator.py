@@ -23,7 +23,7 @@ class ComfortClickCoordinator(DataUpdateCoordinator):
         username: str,
         password: str,
         *,
-        verify_ssl: bool = True,
+        verify_ssl: bool = False,
     ) -> None:
         """Initialize coordinator."""
         _LOGGER.info("Initializing coordinator")

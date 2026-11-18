@@ -33,7 +33,7 @@ DATA_SCHEMA = vol.Schema(
         ): str,
         vol.Required(CONF_USERNAME, description={"suggested_value": "test"}): str,
         vol.Required(CONF_PASSWORD, description={"suggested_value": "1234"}): str,
-        vol.Optional(CONF_VERIFY_SSL, default=True): bool,
+        vol.Optional(CONF_VERIFY_SSL, default=False): bool,
     }
 )
 
@@ -54,7 +54,7 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
         data[CONF_PASSWORD],
         data[CONF_HOST],
         session=async_get_clientsession(hass),
-        verify_ssl=data.get(CONF_VERIFY_SSL, True),
+        verify_ssl=data.get(CONF_VERIFY_SSL, False),
     )
 
     try:
@@ -109,7 +109,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class OptionsFlow(config_entries.OptionsFlow):
-    """Configure an explicit certificate exception without recreating entities."""
+    """Configure certificate verification without recreating entities."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Keep the entry without assigning Home Assistant's config_entry property."""
@@ -121,14 +121,14 @@ class OptionsFlow(config_entries.OptionsFlow):
             options = {**self._entry.options, **user_input}
             if self._entry.state is not config_entries.ConfigEntryState.LOADED:
                 # Failed setup has no update listener. Save before scheduling
-                # reload so a certificate exception takes effect immediately.
+                # reload so the verification preference takes effect immediately.
                 self.hass.config_entries.async_update_entry(
                     self._entry, options=options
                 )
                 self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
             return self.async_create_entry(title="", data=options)
         verify_ssl = self._entry.options.get(
-            CONF_VERIFY_SSL, self._entry.data.get(CONF_VERIFY_SSL, True)
+            CONF_VERIFY_SSL, self._entry.data.get(CONF_VERIFY_SSL, False)
         )
         return self.async_show_form(
             step_id="init",

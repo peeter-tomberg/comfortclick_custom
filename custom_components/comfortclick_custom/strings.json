@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Connect to ComfortClick",
-        "description": "Certificate verification is recommended. Disable it only for a trusted local controller using a self-signed certificate.",
+        "description": "Certificate verification is off by default for compatibility with local controllers using self-signed or invalid certificates. Enable it when your controller has a trusted certificate. Without verification, credentials and commands can be intercepted.",
         "data": {
           "host": "Controller URL",
           "username": "Username",
@@ -24,7 +24,7 @@
     "step": {
       "init": {
         "title": "ComfortClick connection",
-        "description": "Keep verification enabled where possible. Disabling it allows interception of credentials and commands. Use the exception only for a trusted local controller with a self-signed certificate. Saving reloads the integration.",
+        "description": "Certificate verification is off unless you enable it. Enable it when your controller has a trusted certificate. Without verification, credentials and commands can be intercepted. Saving reloads the integration.",
         "data": {
           "verify_ssl": "Verify SSL certificate"
         }
