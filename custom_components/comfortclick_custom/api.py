@@ -19,6 +19,22 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30, connect=10, sock_read=25)
 SESSION_RECOVERY_COOLDOWN = 30
 DOORBELL_SOUND = "DoorBell2.mp3"
 DOORBELL_HISTORY_SIZE = 128
+_SCALAR_TYPES = {
+    "System.Boolean": (bool,),
+    "System.String": (str,),
+    "System.Char": (str,),
+    "System.Byte": (int,),
+    "System.SByte": (int,),
+    "System.Int16": (int,),
+    "System.UInt16": (int,),
+    "System.Int32": (int,),
+    "System.UInt32": (int,),
+    "System.Int64": (int,),
+    "System.UInt64": (int,),
+    "System.Single": (int, float),
+    "System.Double": (int, float),
+    "System.Decimal": (int, float),
+}
 
 
 def create_api_session() -> aiohttp.ClientSession:
@@ -70,6 +86,22 @@ def _parse_doorbell_ring(record: typing.Any) -> DoorbellRing | None:
 # Since keys contain \\ and python handles strings differently
 def _sanitise_device_name(device_name: str) -> str:
     return device_name.replace("\\\\", "\\")
+
+
+def _normalise_scalar_value(value: typing.Any) -> typing.Any:
+    """Unwrap known JSON.NET scalars without coercing or decoding other objects."""
+    if (
+        not isinstance(value, dict)
+        or value.keys() != {"$type", "$value"}
+        or not isinstance(value["$type"], str)
+    ):
+        return value
+    scalar_type = value["$type"].split(",", 1)[0].strip()
+    scalar_value = value["$value"]
+    # Exact types keep booleans distinct from integers, including False and zero.
+    if type(scalar_value) in _SCALAR_TYPES.get(scalar_type, ()):
+        return scalar_value
+    return value
 
 
 def _validate_result(data: typing.Any) -> typing.Any:
@@ -158,7 +190,7 @@ class ApiInstance:
                 "value": value,
             },
         )
-        self._state[_sanitise_device_name(device_name)] = value
+        self._state[_sanitise_device_name(device_name)] = _normalise_scalar_value(value)
 
     async def _request_json(self, path: str, payload: typing.Any = None) -> typing.Any:
         """Make one authenticated request without retrying side effects."""
@@ -341,7 +373,9 @@ class ApiInstance:
         if not isinstance(data, dict) or not isinstance(data.get("ThemeObject"), dict):
             raise ApiResponseError({"message": "Snapshot has no theme object"})
         self._state = {
-            _sanitise_device_name(item["DeviceName"]): item["Value"]
+            _sanitise_device_name(item["DeviceName"]): _normalise_scalar_value(
+                item["Value"]
+            )
             for item in _require_updates(data["ThemeObject"], "ValueUpdates")
         }
         self._snapshot_generation = self._session_generation
