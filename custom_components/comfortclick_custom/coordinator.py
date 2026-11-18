@@ -4,6 +4,7 @@ import logging
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .api import ApiInstance
@@ -20,7 +21,12 @@ class ComfortClickCoordinator(DataUpdateCoordinator):
     ) -> None:
         """Initialize coordinator."""
         _LOGGER.info("Initializing coordinator")
-        self.api = ApiInstance(host=host, username=username, password=password)
+        self.api = ApiInstance(
+            host=host,
+            username=username,
+            password=password,
+            session=async_get_clientsession(hass),
+        )
         super().__init__(
             hass,
             _LOGGER,
@@ -39,5 +45,10 @@ class ComfortClickCoordinator(DataUpdateCoordinator):
 
     async def async_update_data(self) -> None:
         """Update data every 1 second."""
-        _LOGGER.info("Polling API for latest state")
+        _LOGGER.debug("Polling API for latest state")
         await self.api.poll()
+
+    async def async_shutdown(self) -> None:
+        """Stop scheduled refreshes before releasing the server session."""
+        await super().async_shutdown()
+        await self.api.disconnect()
