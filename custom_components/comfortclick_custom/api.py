@@ -279,6 +279,7 @@ class ApiInstance:
         }
 
         default_headers = {
+            "connection": "close",
             "accept": "application/json, text/javascript, */*; q=0.01",
             "accept-language": "en-US,en;q=0.9,et;q=0.8,ru;q=0.7,zh-CN;q=0.6,zh;q=0.5",
             "content-type": "application/json; charset=UTF-8",
