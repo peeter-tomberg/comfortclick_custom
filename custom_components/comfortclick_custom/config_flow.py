@@ -15,9 +15,13 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import callback
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import ApiInstance, AuthorizationError, HttpStatusNotOkError
+from .api import (
+    ApiInstance,
+    AuthorizationError,
+    HttpStatusNotOkError,
+    create_api_session,
+)
 from .const import DOMAIN
 
 if TYPE_CHECKING:
@@ -40,7 +44,7 @@ DATA_SCHEMA = vol.Schema(
 MIN_HOST_LENGTH = 3
 
 
-async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
+async def validate_input(_hass: HomeAssistant, data: dict) -> dict[str, Any]:
     """
     Validate the user input allows us to connect.
 
@@ -49,11 +53,12 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     if len(data[CONF_HOST]) < MIN_HOST_LENGTH:
         raise InvalidHost
 
+    session = create_api_session()
     api = ApiInstance(
         data[CONF_USERNAME],
         data[CONF_PASSWORD],
         data[CONF_HOST],
-        session=async_get_clientsession(hass),
+        session=session,
         verify_ssl=data.get(CONF_VERIFY_SSL, False),
     )
 
@@ -63,7 +68,10 @@ async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
             raise CannotConnect
         return {"title": data[CONF_HOST]}
     finally:
-        await api.disconnect()
+        try:
+            await api.disconnect()
+        finally:
+            await session.close()
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
