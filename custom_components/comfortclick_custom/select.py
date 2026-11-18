@@ -23,6 +23,8 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][config_entry.entry_id].coordinator
 
     config = await load_vent_config()
+    if config is None:
+        return
     sensors = [VentModeSelect(coordinator, config), VentTempSelect(coordinator, config)]
 
     # Create the sensors.

@@ -1,4 +1,4 @@
-"""Config flow for Hello World integration."""
+"""Connect to ComfortClick and expose its mapping options."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from .api import (
     create_api_session,
 )
 from .const import DOMAIN
+from .options_flow import OptionsFlow
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -75,14 +76,14 @@ async def validate_input(_hass: HomeAssistant, data: dict) -> dict[str, Any]:
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Hello World."""
+    """Handle connection setup for ComfortClick."""
 
     VERSION = 1
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> OptionsFlow:
-        """Expose certificate verification for existing entries."""
+        """Expose entity mappings and connection preferences."""
         return OptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict | None = None) -> Any:
@@ -112,36 +113,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user", data_schema=DATA_SCHEMA, errors=errors
-        )
-
-
-class OptionsFlow(config_entries.OptionsFlow):
-    """Configure certificate verification without recreating entities."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Keep the entry without assigning Home Assistant's config_entry property."""
-        self._entry = config_entry
-
-    async def async_step_init(self, user_input: dict | None = None) -> Any:
-        """Save verification preferences even while the controller is unavailable."""
-        if user_input is not None:
-            options = {**self._entry.options, **user_input}
-            if self._entry.state is not config_entries.ConfigEntryState.LOADED:
-                # Failed setup has no update listener. Save before scheduling
-                # reload so the verification preference takes effect immediately.
-                self.hass.config_entries.async_update_entry(
-                    self._entry, options=options
-                )
-                self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
-            return self.async_create_entry(title="", data=options)
-        verify_ssl = self._entry.options.get(
-            CONF_VERIFY_SSL, self._entry.data.get(CONF_VERIFY_SSL, False)
-        )
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {vol.Required(CONF_VERIFY_SSL, default=verify_ssl): bool}
-            ),
         )
 
 

@@ -23,11 +23,130 @@
   "options": {
     "step": {
       "init": {
+        "title": "ComfortClick configuration",
+        "description": "Configure multiple fans, air conditioners and utility meters. Existing YAML mappings remain active until you save changes to that category.",
+        "menu_options": {
+          "fans": "Fans",
+          "thermostats": "Air conditioners",
+          "utilities": "Metrics (utility meters)",
+          "connection": "Connection"
+        }
+      },
+      "connection": {
         "title": "ComfortClick connection",
-        "description": "Certificate verification is off unless you enable it. Enable it when your controller has a trusted certificate. Without verification, credentials and commands can be intercepted. Saving reloads the integration.",
+        "description": "Certificate verification is off unless you enable it. Enable it when your controller has a trusted certificate. Saving reloads the integration. Existing entity mappings are preserved.",
         "data": {
           "verify_ssl": "Verify SSL certificate"
         }
+      },
+      "mapping": {
+        "title": "Manage mappings",
+        "description": "Configured mappings:\n{configured}\n\nChoose an action. Saving a mapping reloads the integration.",
+        "menu_options": {
+          "add_mapping": "Add mapping",
+          "edit_mapping": "Edit mapping",
+          "remove_mapping": "Remove mapping",
+          "init": "Back"
+        }
+      },
+      "edit_mapping": {
+        "title": "Edit mapping",
+        "data": {
+          "mapping": "Mapping"
+        }
+      },
+      "remove_mapping": {
+        "title": "Remove mapping",
+        "data": {
+          "mapping": "Mapping"
+        }
+      },
+      "confirm_remove": {
+        "title": "Remove {name}?",
+        "description": "This stops providing this entity. Its registry entry and recorded history are retained; they are not deleted.",
+        "data": {
+          "confirm": "Remove this mapping"
+        }
+      },
+      "fan": {
+        "title": "Fan mapping",
+        "description": "Choose a cached ComfortClick device path or type one manually. No device commands are sent while configuring. Saving reloads the integration. This fan uses a boolean lock, a boolean heating state, a numeric fan level and two temperature readings.",
+        "data": {
+          "name": "Name",
+          "lock_id": "Fan lock path (true = off)",
+          "fan_id": "Fan level path",
+          "heating_id": "Heating active path",
+          "current_temperature_id": "Current temperature path",
+          "target_temperature_id": "Target temperature path"
+        }
+      },
+      "thermostat": {
+        "title": "Air conditioner mapping",
+        "description": "Choose a cached ComfortClick device path or type one manually. No device commands are sent while configuring. Saving reloads the integration. Leave the fan level path empty for a heating-only thermostat. All temperatures are in Celsius.",
+        "data": {
+          "name": "Name",
+          "heating_id": "Heating active path",
+          "current_temperature_id": "Current temperature path",
+          "target_temperature_id": "Target temperature path",
+          "fan_id": "Fan level path",
+          "min_temp": "Minimum temperature",
+          "max_temp": "Maximum temperature",
+          "target_temperature_step": "Temperature step"
+        }
+      },
+      "utility": {
+        "title": "Utility meter mapping",
+        "description": "Choose a cached ComfortClick device path or type one manually. No device commands are sent while configuring. Saving reloads the integration. Map cumulative totals, not instantaneous power or flow. Default units are m³ for water, kWh for electricity and MWh for heating. Select the unit reported by the controller; this does not rescale the raw reading.",
+        "data": {
+          "name": "Name",
+          "id": "Meter reading path",
+          "type": "Meter type",
+          "unit": "Reading unit"
+        }
+      },
+      "fans": {
+        "title": "Fans",
+        "description": "Fix the YAML configuration and submit to retry loading the mappings."
+      },
+      "thermostats": {
+        "title": "Air conditioners",
+        "description": "Fix the YAML configuration and submit to retry loading the mappings."
+      },
+      "utilities": {
+        "title": "Metrics",
+        "description": "Fix the YAML configuration and submit to retry loading the mappings."
+      }
+    },
+    "error": {
+      "required": "Enter a value.",
+      "duplicate_path": "This controller path is already mapped in this category. Edit the existing mapping instead.",
+      "invalid_number": "Enter a finite number. The temperature step must be greater than zero.",
+      "invalid_range": "The maximum temperature must be greater than the minimum.",
+      "invalid_type": "Select a supported meter type.",
+      "invalid_unit": "Select a water unit for water, or an energy unit for electricity and heating.",
+      "cannot_load_mappings": "Unable to read the mappings. Check comfortclick_custom.yaml for invalid YAML or an invalid category list, then retry.",
+      "incompatible_meter_type": "Water and energy meters cannot share the same history. Add a separate meter mapping for this type."
+    },
+    "abort": {
+      "mappings_changed": "These mappings changed in another configuration window. Reopen Configure to use the latest values."
+    }
+  },
+  "selector": {
+    "meter_type": {
+      "options": {
+        "water": "Water",
+        "electricity": "Electricity",
+        "heating": "Heating"
+      }
+    },
+    "meter_unit": {
+      "options": {
+        "default": "Default for meter type",
+        "m³": "m³",
+        "L": "L",
+        "Wh": "Wh",
+        "kWh": "kWh",
+        "MWh": "MWh"
       }
     }
   }

@@ -29,6 +29,7 @@ class RoomFanConfig:
 
     current_temperature_id: str
     target_temperature_id: str
+    unique_id: str | None = None
 
 
 class RoomFan(CoordinatorEntity, FanEntity):
@@ -51,7 +52,9 @@ class RoomFan(CoordinatorEntity, FanEntity):
         self._attr_is_on = self._get_fan_state_from_api_state()
 
         # re-using heating id as unique id for this device
-        self._attr_unique_id = config.fan_id
+        self._attr_unique_id = (
+            config.unique_id if config.unique_id is not None else config.fan_id
+        )
         # human-readable name
         self._attr_name = config.name
 

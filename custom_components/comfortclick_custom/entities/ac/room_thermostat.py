@@ -32,8 +32,9 @@ class RoomThermostatConfig:
     target_temperature_step: float = (
         0.5  # How many degrees can we go up/down in one click
     )
-    min_temp: int = 18
-    max_temp: int = 24
+    min_temp: float = 18
+    max_temp: float = 24
+    unique_id: str | None = None
 
 
 # 5 is considered off, anything above 5 is on
@@ -70,7 +71,11 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         # human-readable name
         self._attr_name = config.name
         # re-using heating id as unique id for this device
-        self._attr_unique_id = f"room-1-{config.heating_id}"
+        self._attr_unique_id = (
+            config.unique_id
+            if config.unique_id is not None
+            else f"room-1-{config.heating_id}"
+        )
 
         self._attr_target_temperature_step = config.target_temperature_step
         self._attr_min_temp = config.min_temp

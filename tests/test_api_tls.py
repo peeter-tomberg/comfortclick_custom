@@ -149,10 +149,10 @@ async def test_options_can_enable_verification_without_connecting() -> None:
     entry.options = {"unrelated": "preserve"}
     entry.state = ConfigEntryState.LOADED
     flow = config_flow.ConfigFlow.async_get_options_flow(entry)
-    form = await flow.async_step_init()
+    form = await flow.async_step_connection()
     assert form["data_schema"]({})[CONF_VERIFY_SSL] is False
 
-    result = await flow.async_step_init({CONF_VERIFY_SSL: True})
+    result = await flow.async_step_connection({CONF_VERIFY_SSL: True})
 
     assert result["data"] == {"unrelated": "preserve", CONF_VERIFY_SSL: True}
 
@@ -170,7 +170,7 @@ async def test_options_form_preserves_saved_verification(
     entry.options = options
     flow = config_flow.ConfigFlow.async_get_options_flow(entry)
 
-    form = await flow.async_step_init()
+    form = await flow.async_step_connection()
 
     assert form["data_schema"]({})[CONF_VERIFY_SSL] is True
 
@@ -186,7 +186,7 @@ async def test_failed_setup_is_reloaded_after_saving_certificate_exception() -> 
     flow.hass = MagicMock(spec=HomeAssistant)
     flow.hass.config_entries = MagicMock()
 
-    result = await flow.async_step_init({CONF_VERIFY_SSL: False})
+    result = await flow.async_step_connection({CONF_VERIFY_SSL: False})
 
     assert result["data"] == {CONF_VERIFY_SSL: False}
     assert flow.hass.config_entries.mock_calls == [
