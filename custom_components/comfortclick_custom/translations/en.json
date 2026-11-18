@@ -17,17 +17,209 @@
       "cannot_connect": "Unable to connect to the controller.",
       "invalid_auth": "The controller rejected the credentials.",
       "ssl_error": "The certificate could not be verified. Use a trusted certificate matching the controller URL, or disable verification only for a trusted local controller.",
-      "unknown": "An unexpected error occurred. Check the Home Assistant log."
+      "unknown": "An unexpected error occurred. Check the Home Assistant log.",
+      "invalid_host": "Enter an HTTP or HTTPS controller URL without embedded credentials, a query, or a fragment."
     }
   },
   "options": {
     "step": {
       "init": {
+        "title": "ComfortClick configuration",
+        "description": "Map building doors, utility meters and ventilation controls. Add air conditioners and fans for each room. Saves return here. For Back navigation from edit forms, open ComfortClick in the sidebar.",
+        "menu_options": {
+          "ventilation": "Ventilation",
+          "locks": "Building doors",
+          "utilities": "Utility meters",
+          "thermostats": "Air conditioners",
+          "fans": "Fans",
+          "doorbell": "Doorbell",
+          "connection": "Connection",
+          "done": "Done"
+        }
+      },
+      "connection": {
         "title": "ComfortClick connection",
-        "description": "Certificate verification is off unless you enable it. Enable it when your controller has a trusted certificate. Without verification, credentials and commands can be intercepted. Saving reloads the integration.",
+        "description": "Update the controller address and login. Leave Password blank to keep the saved password. Changed login details are checked before saving. Enable certificate verification when your controller has a trusted certificate.",
         "data": {
+          "host": "Controller URL",
+          "username": "Username",
+          "password": "Password (leave blank to keep current)",
           "verify_ssl": "Verify SSL certificate"
         }
+      },
+      "mapping": {
+        "title": "{category}",
+        "description": "Select a device to edit it, or add a new one.",
+        "menu_options": {
+          "add_mapping": "Add mapping",
+          "edit_mapping": "Edit mapping",
+          "remove_mapping": "Remove mapping",
+          "init": "Back"
+        }
+      },
+      "edit_mapping": {
+        "title": "Edit mapping",
+        "data": {
+          "mapping": "Mapping"
+        }
+      },
+      "remove_mapping": {
+        "title": "Remove mapping",
+        "description": "Select the device to remove. You will confirm before it is removed."
+      },
+      "confirm_remove": {
+        "title": "Remove {name}?",
+        "description": "This stops providing this entity. Its registry entry and recorded history are retained; they are not deleted.",
+        "data": {
+          "confirm": "Remove this mapping"
+        }
+      },
+      "fan": {
+        "title": "Fan mapping",
+        "description": "Choose a cached ComfortClick device path or type one manually. No device commands are sent while configuring. Saving reloads the integration. This fan uses a boolean lock, a boolean heating state, a numeric fan level and two temperature readings.",
+        "data": {
+          "name": "Name",
+          "lock_id": "Fan lock path (true = off)",
+          "fan_id": "Fan level path",
+          "heating_id": "Heating active path",
+          "current_temperature_id": "Current temperature path",
+          "target_temperature_id": "Target temperature path",
+          "area_id": "Room"
+        }
+      },
+      "thermostat": {
+        "title": "Air conditioner mapping",
+        "description": "Choose a cached ComfortClick device path or type one manually. No device commands are sent while configuring. Saving reloads the integration. Leave the fan level path empty for a heating-only thermostat. All temperatures are in Celsius.",
+        "data": {
+          "name": "Name",
+          "heating_id": "Heating active path",
+          "current_temperature_id": "Current temperature path",
+          "target_temperature_id": "Target temperature path",
+          "fan_id": "Fan level path",
+          "min_temp": "Minimum temperature",
+          "max_temp": "Maximum temperature",
+          "target_temperature_step": "Temperature step",
+          "area_id": "Room"
+        }
+      },
+      "utility": {
+        "title": "{name}",
+        "description": "Edit this fixed meter’s reading path. The slot and its history remain the same. Match the unit to the raw cumulative reading; changing the unit does not rescale it. Leave the path empty if unconfigured. Saving reloads the integration.",
+        "data": {
+          "id": "Meter reading path",
+          "unit": "Reading unit"
+        }
+      },
+      "fans": {
+        "title": "Fans",
+        "description": "The stored mappings could not be loaded. Check the integration log for details, then retry."
+      },
+      "thermostats": {
+        "title": "Air conditioners",
+        "description": "The stored mappings could not be loaded. Check the integration log for details, then retry."
+      },
+      "utilities": {
+        "title": "Utility meters",
+        "description": "These five meters are fixed. Choose one to edit its controller path and reading unit.",
+        "menu_options": {
+          "meter_electricity_day": "Electricity — day",
+          "meter_electricity_night": "Electricity — night",
+          "meter_water_cold": "Cold water",
+          "meter_water_hot": "Hot water",
+          "meter_heating": "Heating",
+          "init": "Back"
+        }
+      },
+      "locks": {
+        "title": "Building doors",
+        "description": "These three doors belong to the building. Choose a door to edit its controller path. Configuration does not unlock a door.",
+        "menu_options": {
+          "door_main": "Main door",
+          "door_cellar": "Cellar door",
+          "door_garage": "Garage door",
+          "init": "Back"
+        }
+      },
+      "door": {
+        "title": "{name}",
+        "description": "Edit this building door’s controller path. Leave it empty if unconfigured. Saving reloads the integration and does not send a door command.",
+        "data": {
+          "door_id": "Door control and feedback path"
+        }
+      },
+      "ventilation": {
+        "title": "Ventilation",
+        "description": "One instance of each control serves the apartment. Each control can use several underlying controller paths.",
+        "menu_options": {
+          "vent_mode": "Mode — Away / Home / Guests",
+          "vent_air_mode": "Air mode — Warm / Cold",
+          "vent_temperature": "Air temperature",
+          "init": "Back"
+        }
+      },
+      "vent_mode": {
+        "title": "Ventilation mode",
+        "description": "Map the three boolean mode paths behind the single ventilation selector. Selecting a mode sends true to its path. Map all three paths to enable the selector. Saving reloads the integration.",
+        "data": {
+          "away_mode": "Away path",
+          "home_mode": "Home path",
+          "guest_mode": "Guests path"
+        }
+      },
+      "vent_air_mode": {
+        "title": "Ventilation air mode",
+        "description": "Map the winter-mode boolean behind the single air selector. True means Warm air; false means Cold air. Leave it empty if unconfigured. Saving reloads the integration.",
+        "data": {
+          "vent_winter_mode": "Winter-mode path"
+        }
+      },
+      "vent_temperature": {
+        "title": "Ventilation air temperature",
+        "description": "One temperature sensor displays the reading for the active ventilation mode. Map the mode paths first, then the relevant temperature readings below. Missing readings remain unavailable. Saving reloads the integration.",
+        "data": {
+          "away_vent_air_temp": "Air temperature while Away",
+          "home_vent_air_temp": "Air temperature while Home",
+          "guest_vent_air_temp": "Air temperature while Guests"
+        }
+      },
+      "doorbell": {
+        "title": "Doorbell",
+        "description": "One ComfortClick Doorbell event is created automatically for this controller. Use it in your doorbell automations. No manual mapping is required. Submit to return to configuration."
+      }
+    },
+    "error": {
+      "required": "Enter a value.",
+      "duplicate_path": "This controller path is already mapped in this category. Edit the existing mapping instead.",
+      "invalid_number": "Enter a finite number. The temperature step must be greater than zero.",
+      "invalid_range": "The maximum temperature must be greater than the minimum.",
+      "invalid_type": "Select a supported meter type.",
+      "invalid_unit": "Select a water unit for water, or an energy unit for electricity and heating.",
+      "cannot_load_mappings": "Unable to read the stored mappings. Check the integration log for details.",
+      "incompatible_meter_type": "Water and energy meters cannot share the same history. Add a separate meter mapping for this type.",
+      "cannot_load_fixed_mappings": "An existing mapping could not be assigned uniquely to the fixed slots. No mappings have been changed.",
+      "invalid_host": "Enter an HTTP or HTTPS controller URL without embedded credentials, a query, or a fragment.",
+      "invalid_auth": "The controller rejected the credentials.",
+      "cannot_connect": "Unable to connect to the controller.",
+      "ssl_error": "The certificate could not be verified. Use a trusted certificate matching the controller URL, or disable verification only for a trusted local controller.",
+      "unknown": "An unexpected error occurred. Check the Home Assistant log."
+    },
+    "abort": {
+      "mappings_changed": "These mappings changed in another configuration window. Reopen Configure to use the latest values.",
+      "fixed_slots": "This category has predefined slots. Open its menu to edit a slot; slots cannot be added or removed.",
+      "connection_changed": "Connection settings changed in another window. Reopen Configure to use the latest values."
+    }
+  },
+  "selector": {
+    "meter_type": {
+      "options": {
+        "water": "Water",
+        "electricity": "Electricity",
+        "heating": "Heating"
+      }
+    },
+    "meter_unit": {
+      "options": {
+        "default": "Default for meter type"
       }
     }
   }

@@ -19,6 +19,7 @@ class BuildingLockConfig:
 
     door_name: str = None
     door_id: str = None
+    unique_id: str | None = None
 
 
 class BuildingLock(CoordinatorEntity, LockEntity):
@@ -33,7 +34,9 @@ class BuildingLock(CoordinatorEntity, LockEntity):
         self._coordinator = coordinator
         self._config = config
         # re-using door id as unique id for this device
-        self._attr_unique_id = config.door_id
+        self._attr_unique_id = (
+            config.unique_id if config.unique_id is not None else config.door_id
+        )
         # human-readable name
         self._attr_name = config.door_name
         self._attr_is_open = self._get_is_open_from_api_state()
@@ -71,6 +74,8 @@ class BuildingLock(CoordinatorEntity, LockEntity):
         self.async_write_ha_state()
 
     def _get_is_open_from_api_state(self) -> bool | None:
+        if not self._config.door_id:
+            return None
         value = self._coordinator.api.get_value(device_name=self._config.door_id)
         return value if isinstance(value, bool) else None
 

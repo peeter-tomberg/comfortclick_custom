@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from custom_components import comfortclick_custom as integration
-from custom_components.comfortclick_custom import config_flow
+from custom_components.comfortclick_custom import config_flow, connection
 from custom_components.comfortclick_custom import coordinator as coordinator_module
 from custom_components.comfortclick_custom.api import (
     ApiClosedError,
@@ -96,7 +96,7 @@ async def test_flow_validation_releases_temporary_session(
         token="temporary",  # noqa: S106
     )
     session.get.return_value = response()
-    monkeypatch.setattr(config_flow, "create_api_session", lambda: session)
+    monkeypatch.setattr(connection, "create_api_session", lambda: session)
     data = {
         CONF_HOST: "https://controller.test",
         CONF_USERNAME: "user",
@@ -126,7 +126,7 @@ async def test_validation_closes_owned_client_on_failure_or_cancellation(
     session.get.return_value = response()
     request = session.post if stage == "login" else session.get
     request.side_effect = failure
-    monkeypatch.setattr(config_flow, "create_api_session", lambda: session)
+    monkeypatch.setattr(connection, "create_api_session", lambda: session)
     data = {
         CONF_HOST: "https://controller.test",
         CONF_USERNAME: "user",

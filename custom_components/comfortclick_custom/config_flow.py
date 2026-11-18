@@ -1,13 +1,11 @@
-"""Config flow for Hello World integration."""
+"""Connect to ComfortClick and expose its mapping options."""
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-import aiohttp
 import voluptuous as vol
-from homeassistant import config_entries, exceptions
+from homeassistant import config_entries
 from homeassistant.const import (
     CONF_HOST,
     CONF_PASSWORD,
@@ -15,74 +13,34 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 
-from .api import (
-    ApiInstance,
-    AuthorizationError,
-    HttpStatusNotOkError,
-    create_api_session,
-)
+from .connection import connection_errors, normalize_host, validate_input
 from .const import DOMAIN
-
-if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-
-
-_LOGGER = logging.getLogger(__name__)
+from .migration import CONFIG_ENTRY_VERSION, empty_mapping_options
+from .options_flow import OptionsFlow
 
 DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(
-            CONF_HOST, description={"suggested_value": "https://68.67.65.65"}
-        ): str,
-        vol.Required(CONF_USERNAME, description={"suggested_value": "test"}): str,
-        vol.Required(CONF_PASSWORD, description={"suggested_value": "1234"}): str,
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_USERNAME): str,
+        vol.Required(CONF_PASSWORD): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+        ),
         vol.Optional(CONF_VERIFY_SSL, default=False): bool,
     }
 )
 
-MIN_HOST_LENGTH = 3
-
-
-async def validate_input(_hass: HomeAssistant, data: dict) -> dict[str, Any]:
-    """
-    Validate the user input allows us to connect.
-
-    Data has the keys from DATA_SCHEMA with values provided by the user.
-    """
-    if len(data[CONF_HOST]) < MIN_HOST_LENGTH:
-        raise InvalidHost
-
-    session = create_api_session()
-    api = ApiInstance(
-        data[CONF_USERNAME],
-        data[CONF_PASSWORD],
-        data[CONF_HOST],
-        session=session,
-        verify_ssl=data.get(CONF_VERIFY_SSL, False),
-    )
-
-    try:
-        result = await api.connect()
-        if not result:
-            raise CannotConnect
-        return {"title": data[CONF_HOST]}
-    finally:
-        try:
-            await api.disconnect()
-        finally:
-            await session.close()
-
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Hello World."""
+    """Handle connection setup for ComfortClick."""
 
-    VERSION = 1
+    VERSION = CONFIG_ENTRY_VERSION
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> OptionsFlow:
-        """Expose certificate verification for existing entries."""
+        """Expose entity mappings and connection preferences."""
         return OptionsFlow(config_entry)
 
     async def async_step_user(self, user_input: dict | None = None) -> Any:
@@ -90,64 +48,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             try:
-                info = await validate_input(self.hass, user_input)
-
-                return self.async_create_entry(title=info["title"], data=user_input)
-            except aiohttp.ClientConnectorCertificateError:
-                errors["base"] = "ssl_error"
-            except AuthorizationError:
-                errors["base"] = "invalid_auth"
-            except (
-                CannotConnect,
-                aiohttp.ClientError,
-                TimeoutError,
-                HttpStatusNotOkError,
-            ):
-                errors["base"] = "cannot_connect"
-            except InvalidHost:
-                errors["host"] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
+                data = {**user_input, CONF_HOST: normalize_host(user_input[CONF_HOST])}
+                info = await validate_input(self.hass, data)
+                options = empty_mapping_options()
+                options[CONF_VERIFY_SSL] = data.get(CONF_VERIFY_SSL, False)
+                return self.async_create_entry(
+                    title=info["title"], data=data, options=options
+                )
+            except Exception as error:  # noqa: BLE001 - Return a credential-safe error.
+                errors = connection_errors(error)
 
         return self.async_show_form(
             step_id="user", data_schema=DATA_SCHEMA, errors=errors
         )
-
-
-class OptionsFlow(config_entries.OptionsFlow):
-    """Configure certificate verification without recreating entities."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Keep the entry without assigning Home Assistant's config_entry property."""
-        self._entry = config_entry
-
-    async def async_step_init(self, user_input: dict | None = None) -> Any:
-        """Save verification preferences even while the controller is unavailable."""
-        if user_input is not None:
-            options = {**self._entry.options, **user_input}
-            if self._entry.state is not config_entries.ConfigEntryState.LOADED:
-                # Failed setup has no update listener. Save before scheduling
-                # reload so the verification preference takes effect immediately.
-                self.hass.config_entries.async_update_entry(
-                    self._entry, options=options
-                )
-                self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
-            return self.async_create_entry(title="", data=options)
-        verify_ssl = self._entry.options.get(
-            CONF_VERIFY_SSL, self._entry.data.get(CONF_VERIFY_SSL, False)
-        )
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {vol.Required(CONF_VERIFY_SSL, default=verify_ssl): bool}
-            ),
-        )
-
-
-class CannotConnect(exceptions.HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class InvalidHost(exceptions.HomeAssistantError):
-    """Error to indicate there is an invalid hostname."""

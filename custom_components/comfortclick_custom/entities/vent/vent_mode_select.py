@@ -1,7 +1,6 @@
 """Exposes vent mode control to home assistant."""
 
 import logging
-from enum import StrEnum
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import callback
@@ -9,16 +8,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ... import ComfortClickCoordinator
 from .vent_config import VentConfig
+from .vent_state import VentPresetModes, active_mode
 
 _LOGGER = logging.getLogger(__name__)
-
-
-class VentPresetModes(StrEnum):
-    """Available vent modes in comfort click."""
-
-    HOME = "Home"
-    AWAY = "Away"
-    GUESTS = "Guests"
 
 
 class VentModeSelect(CoordinatorEntity, SelectEntity):
@@ -33,18 +25,23 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
             VentPresetModes.HOME,
             VentPresetModes.GUESTS,
         ]
-        self._attr_current_option = None
 
         # re-using sensor id as unique id for this device
         self._attr_unique_id = "comfortclick-apartment-vent-mode-select"
         # coordinator that manages state
         self._coordinator = coordinator
         self._config = config
+        self._attr_current_option = active_mode(coordinator.api, config)
         # human-readable name
         self._attr_name = "Ventilation mode"
 
         # start listener on coordinator
         super().__init__(coordinator)
+
+    @property
+    def available(self) -> bool:
+        """Return availability only when the active mode is known."""
+        return super().available and self.current_option is not None
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
@@ -56,30 +53,8 @@ class VentModeSelect(CoordinatorEntity, SelectEntity):
         if option == VentPresetModes.GUESTS:
             await self._coordinator.api.set_value(self._config.guest_mode, value=True)
 
-    def _check_home_mode(self) -> bool:
-        is_home_mode_on = self._coordinator.api.get_value(self._config.home_mode)
-        if is_home_mode_on and self.current_option != VentPresetModes.HOME:
-            self._attr_current_option = VentPresetModes.HOME
-            return True
-        return False
-
-    def _check_away_mode(self) -> bool:
-        is_away_mode_on = self._coordinator.api.get_value(self._config.away_mode)
-        if is_away_mode_on and self.current_option != VentPresetModes.AWAY:
-            self._attr_current_option = VentPresetModes.AWAY
-            return True
-        return False
-
-    def _check_guest_mode(self) -> bool:
-        is_guest_mode_on = self._coordinator.api.get_value(self._config.guest_mode)
-        if is_guest_mode_on and self.current_option != VentPresetModes.GUESTS:
-            self._attr_current_option = VentPresetModes.GUESTS
-            return True
-        return False
-
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        if not self._check_home_mode() and not self._check_away_mode():
-            self._check_guest_mode()
+        self._attr_current_option = active_mode(self._coordinator.api, self._config)
         super()._handle_coordinator_update()

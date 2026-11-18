@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant
 from custom_components import comfortclick_custom as integration
 from custom_components.comfortclick_custom import (
     config_flow,
+    connection,
 )
 from custom_components.comfortclick_custom import (
     coordinator as coordinator_module,
@@ -79,7 +80,7 @@ async def test_validation_without_saved_preference_leaves_verification_off(
     session = MagicMock(spec=aiohttp.ClientSession)
     session.post.return_value = response({"Status": "OK"}, token="session")  # noqa: S106
     session.get.return_value = response()
-    monkeypatch.setattr(config_flow, "create_api_session", lambda: session)
+    monkeypatch.setattr(connection, "create_api_session", lambda: session)
 
     await config_flow.validate_input(
         MagicMock(spec=HomeAssistant),
@@ -102,7 +103,7 @@ async def test_certificate_failure_has_actionable_form_error_and_no_fallback(
     session.post.side_effect = aiohttp.ClientConnectorCertificateError(
         MagicMock(), ssl.SSLCertVerificationError("self-signed certificate")
     )
-    monkeypatch.setattr(config_flow, "create_api_session", lambda: session)
+    monkeypatch.setattr(connection, "create_api_session", lambda: session)
     flow = config_flow.ConfigFlow()
     flow.hass = MagicMock(spec=HomeAssistant)
 
@@ -145,16 +146,28 @@ async def test_setup_form_defaults_off_and_saves_explicit_verification(
 @pytest.mark.asyncio
 async def test_options_can_enable_verification_without_connecting() -> None:
     entry = MagicMock(spec=ConfigEntry)
-    entry.data = {}
+    entry.data = {
+        CONF_HOST: "https://controller.test",
+        CONF_USERNAME: "user",
+        CONF_PASSWORD: "password",
+    }
     entry.options = {"unrelated": "preserve"}
     entry.state = ConfigEntryState.LOADED
+    entry.update_listeners = []
     flow = config_flow.ConfigFlow.async_get_options_flow(entry)
-    form = await flow.async_step_init()
+    flow.hass = MagicMock(spec=HomeAssistant)
+    flow.hass.config_entries = MagicMock()
+    form = await flow.async_step_connection()
     assert form["data_schema"]({})[CONF_VERIFY_SSL] is False
 
-    result = await flow.async_step_init({CONF_VERIFY_SSL: True})
+    result = await flow.async_step_connection({CONF_VERIFY_SSL: True})
 
-    assert result["data"] == {"unrelated": "preserve", CONF_VERIFY_SSL: True}
+    assert result["type"] == "menu"
+    assert result["step_id"] == "init"
+    assert flow.hass.config_entries.async_update_entry.call_args.kwargs["options"] == {
+        "unrelated": "preserve",
+        CONF_VERIFY_SSL: True,
+    }
 
 
 @pytest.mark.asyncio
@@ -170,7 +183,7 @@ async def test_options_form_preserves_saved_verification(
     entry.options = options
     flow = config_flow.ConfigFlow.async_get_options_flow(entry)
 
-    form = await flow.async_step_init()
+    form = await flow.async_step_connection()
 
     assert form["data_schema"]({})[CONF_VERIFY_SSL] is True
 
@@ -179,18 +192,28 @@ async def test_options_form_preserves_saved_verification(
 async def test_failed_setup_is_reloaded_after_saving_certificate_exception() -> None:
     entry = MagicMock(spec=ConfigEntry)
     entry.entry_id = "test-entry"
-    entry.data = {}
+    entry.data = {
+        CONF_HOST: "https://controller.test",
+        CONF_USERNAME: "user",
+        CONF_PASSWORD: "password",
+    }
     entry.options = {CONF_VERIFY_SSL: True}
     entry.state = ConfigEntryState.SETUP_RETRY
+    entry.update_listeners = []
     flow = config_flow.ConfigFlow.async_get_options_flow(entry)
     flow.hass = MagicMock(spec=HomeAssistant)
     flow.hass.config_entries = MagicMock()
 
-    result = await flow.async_step_init({CONF_VERIFY_SSL: False})
+    result = await flow.async_step_connection({CONF_VERIFY_SSL: False})
 
-    assert result["data"] == {CONF_VERIFY_SSL: False}
+    assert result["type"] == "menu"
+    assert result["step_id"] == "init"
     assert flow.hass.config_entries.mock_calls == [
-        call.async_update_entry(entry, options={CONF_VERIFY_SSL: False}),
+        call.async_update_entry(
+            entry,
+            data={**entry.data, CONF_VERIFY_SSL: False},
+            options={CONF_VERIFY_SSL: False},
+        ),
         call.async_schedule_reload(entry.entry_id),
     ]
 

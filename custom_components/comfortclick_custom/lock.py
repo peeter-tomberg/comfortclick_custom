@@ -21,7 +21,7 @@ async def async_setup_entry(
     """Set up the Locks."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id].coordinator
 
-    configs = await load_lock_config()
+    configs = await load_lock_config(config_entry.options)
     sensors = [BuildingLock(coordinator, config) for config in configs]
 
     # Create the sensors.

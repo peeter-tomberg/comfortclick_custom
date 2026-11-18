@@ -46,6 +46,7 @@ class UtilitiesSensorConfig:
     id: str = None
     name: str = None
     description: SensorEntityDescription = None
+    unique_id: str | None = None
 
 
 class UtilitiesSensor(CoordinatorEntity, SensorEntity):
@@ -59,7 +60,9 @@ class UtilitiesSensor(CoordinatorEntity, SensorEntity):
         self._coordinator = coordinator
         self._config = config
         # re-using sensor id as unique id for this device
-        self._attr_unique_id = config.id
+        self._attr_unique_id = (
+            config.unique_id if config.unique_id is not None else config.id
+        )
         self.entity_description = config.description
         # human-readable name
         self._attr_name = config.name
@@ -70,6 +73,6 @@ class UtilitiesSensor(CoordinatorEntity, SensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor."""
-        updated_value = self._coordinator.api.get_value(self._attr_unique_id)
+        updated_value = self._coordinator.api.get_value(self._config.id)
         self._attr_native_value = updated_value
         super()._handle_coordinator_update()

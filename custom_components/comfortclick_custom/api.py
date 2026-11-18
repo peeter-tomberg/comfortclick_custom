@@ -276,6 +276,10 @@ class ApiInstance:
         }
         return await self._authenticated_request("SetValue", payload)
 
+    def get_device_paths(self) -> tuple[str, ...]:
+        """List cached controller paths for configuration without making requests."""
+        return tuple(sorted(self._state))
+
     def get_value(self, device_name: str) -> typing.Any:
         """Get value for device from internal state."""
         value = self._state.get(_sanitise_device_name(device_name))

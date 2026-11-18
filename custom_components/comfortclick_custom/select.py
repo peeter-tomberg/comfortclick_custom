@@ -22,8 +22,14 @@ async def async_setup_entry(
     """Set up the Selects."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id].coordinator
 
-    config = await load_vent_config()
-    sensors = [VentModeSelect(coordinator, config), VentTempSelect(coordinator, config)]
+    config = await load_vent_config(config_entry.options)
+    if config is None:
+        return
+    sensors = []
+    if config.has_mode_paths:
+        sensors.append(VentModeSelect(coordinator, config))
+    if config.has_winter_mode:
+        sensors.append(VentTempSelect(coordinator, config))
 
     # Create the sensors.
     async_add_entities(sensors)
