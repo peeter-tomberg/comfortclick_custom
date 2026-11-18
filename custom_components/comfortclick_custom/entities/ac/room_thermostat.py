@@ -55,7 +55,11 @@ class RoomThermostat(CoordinatorEntity, ClimateEntity):
         self._attr_hvac_modes = [HVACMode.HEAT_COOL]
         self._attr_hvac_mode = HVACMode.HEAT_COOL
         self._attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
-        self._attr_temperature_unit = UnitOfTemperature.CELSIUS
+        if hasattr(ClimateEntity, "native_temperature_unit"):
+            self._attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+        else:
+            # Support Home Assistant versions before native climate temperatures.
+            self._attr_temperature_unit = UnitOfTemperature.CELSIUS
 
         # coordinator that manages state
         self._coordinator = coordinator
